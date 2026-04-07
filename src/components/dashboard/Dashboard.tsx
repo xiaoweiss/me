@@ -15,7 +15,7 @@ import type { DayData, VenueType, TimePeriod, Filters, ThresholdBand } from "@/a
 import { BarChart3, CalendarRange } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
 
 export function Dashboard() {
   const isMobile = useIsMobile();
