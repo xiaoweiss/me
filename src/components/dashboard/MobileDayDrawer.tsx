@@ -17,9 +17,9 @@ interface MobileDayDrawerProps {
 }
 
 const PERIODS: { key: "AM" | "PM" | "EV"; label: string }[] = [
-  { key: "AM", label: "上午 Morning" },
-  { key: "PM", label: "下午 Afternoon" },
-  { key: "EV", label: "晚上 Evening" },
+  { key: "AM", label: "上午" },
+  { key: "PM", label: "下午" },
+  { key: "EV", label: "晚上" },
 ];
 
 export function MobileDayDrawer({ day, open, onClose, mode, thresholds }: MobileDayDrawerProps) {

@@ -11,8 +11,8 @@ export function Legend({ days, thresholds, mode }: LegendProps) {
 
   const myAvg = Math.round(days.reduce((s, d) => s + d.myHotelRate, 0) / days.length);
 
-  const compLabel = mode === "occupancy" ? "Comp Avg" : "Comp Total";
-  const marketLabel = mode === "occupancy" ? "Market Avg" : "Market Total";
+  const compLabel = mode === "occupancy" ? "竞对均值" : "竞对总值";
+  const marketLabel = mode === "occupancy" ? "商圈均值" : "商圈总值";
 
   const compValue = mode === "occupancy"
     ? Math.round(days.reduce((s, d) => s + d.competitorAvgRate, 0) / days.length)
@@ -25,7 +25,7 @@ export function Legend({ days, thresholds, mode }: LegendProps) {
   const suffix = mode === "occupancy" ? "%" : "";
 
   const items = [
-    { label: "My Hotel", value: myAvg, colorClass: "bg-chart-mine" },
+    { label: "本酒店", value: myAvg, colorClass: "bg-chart-mine" },
     { label: compLabel, value: compValue, colorClass: "bg-chart-comp" },
     { label: marketLabel, value: marketValue, colorClass: "bg-chart-market" },
   ];

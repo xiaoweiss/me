@@ -83,8 +83,8 @@ export function Dashboard() {
       <header className="border-b bg-card">
         <div className="container mx-auto flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-xl font-display font-bold text-foreground">Meeting Room Operations</h1>
-            <p className="text-sm text-muted-foreground">Monitor occupancy, bookings & competitive landscape</p>
+            <h1 className="text-xl font-display font-bold text-foreground">会议室运营</h1>
+            <p className="text-sm text-muted-foreground">出租率与竞对数据监控</p>
           </div>
           <MonthYearSelector month={month} year={year} onMonthChange={setMonth} onYearChange={setYear} />
         </div>
@@ -96,13 +96,11 @@ export function Dashboard() {
             <TabsList>
               <TabsTrigger value="occupancy" className="gap-1.5">
                 <BarChart3 className="h-4 w-4" />
-                <span className="hidden sm:inline">Occupancy Heatmap</span>
-                <span className="sm:hidden">Occupancy</span>
+                出租率
               </TabsTrigger>
               <TabsTrigger value="bookings" className="gap-1.5">
                 <CalendarRange className="h-4 w-4" />
-                <span className="hidden sm:inline">Activity Count</span>
-                <span className="sm:hidden">Bookings</span>
+                活动预订
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -117,7 +115,7 @@ export function Dashboard() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-display">
-              {mode === "occupancy" ? "Monthly Occupancy Rate" : "Activity Count"}
+              {mode === "occupancy" ? "月度出租率" : "活动预订"}
             </CardTitle>
             <Legend days={days} thresholds={thresholds} mode={mode} />
           </CardHeader>

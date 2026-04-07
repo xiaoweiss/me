@@ -11,8 +11,17 @@ interface FilterBarProps {
   onTimePeriodChange: (v: TimePeriod) => void;
 }
 
-const venueOptions: VenueType[] = ["All", "Ballroom", "Conference Room"];
-const timeOptions: TimePeriod[] = ["All", "AM", "PM", "EV"];
+const venueOptions: { value: VenueType; label: string }[] = [
+  { value: "All", label: "全部" },
+  { value: "Ballroom", label: "宴会厅" },
+  { value: "Conference Room", label: "会议室" },
+];
+const timeOptions: { value: TimePeriod; label: string }[] = [
+  { value: "All", label: "全部" },
+  { value: "AM", label: "上午" },
+  { value: "PM", label: "下午" },
+  { value: "EV", label: "晚上" },
+];
 
 export function FilterBar({ venueType, timePeriod, onVenueTypeChange, onTimePeriodChange }: FilterBarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -22,33 +31,33 @@ export function FilterBar({ venueType, timePeriod, onVenueTypeChange, onTimePeri
       {/* Desktop */}
       <div className="hidden sm:flex flex-wrap items-center gap-6">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-muted-foreground">Venue</span>
+          <span className="text-sm font-medium text-muted-foreground">场地类型</span>
           <div className="flex gap-1 rounded-lg bg-muted p-1">
             {venueOptions.map((v) => (
               <Button
-                key={v}
+                key={v.value}
                 size="sm"
-                variant={venueType === v ? "default" : "ghost"}
-                className={cn("h-7 px-3 text-xs", venueType !== v && "text-muted-foreground")}
-                onClick={() => onVenueTypeChange(v)}
+                variant={venueType === v.value ? "default" : "ghost"}
+                className={cn("h-7 px-3 text-xs", venueType !== v.value && "text-muted-foreground")}
+                onClick={() => onVenueTypeChange(v.value)}
               >
-                {v}
+                {v.label}
               </Button>
             ))}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-muted-foreground">Period</span>
+          <span className="text-sm font-medium text-muted-foreground">时段</span>
           <div className="flex gap-1 rounded-lg bg-muted p-1">
             {timeOptions.map((t) => (
               <Button
-                key={t}
+                key={t.value}
                 size="sm"
-                variant={timePeriod === t ? "default" : "ghost"}
-                className={cn("h-7 px-3 text-xs", timePeriod !== t && "text-muted-foreground")}
-                onClick={() => onTimePeriodChange(t)}
+                variant={timePeriod === t.value ? "default" : "ghost"}
+                className={cn("h-7 px-3 text-xs", timePeriod !== t.value && "text-muted-foreground")}
+                onClick={() => onTimePeriodChange(t.value)}
               >
-                {t}
+                {t.label}
               </Button>
             ))}
           </div>
@@ -72,39 +81,39 @@ export function FilterBar({ venueType, timePeriod, onVenueTypeChange, onTimePeri
         {mobileOpen && (
           <div className="mt-3 rounded-lg border bg-card p-3 space-y-3">
             <div className="space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Venue</span>
+              <span className="text-xs font-medium text-muted-foreground">场地类型</span>
               <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
                 {venueOptions.map((v) => (
                   <Button
-                    key={v}
+                    key={v.value}
                     size="sm"
-                    variant={venueType === v ? "default" : "outline"}
+                    variant={venueType === v.value ? "default" : "outline"}
                     className={cn(
                       "h-7 px-3 text-xs shrink-0 rounded-full",
-                      venueType !== v && "text-muted-foreground"
+                      venueType !== v.value && "text-muted-foreground"
                     )}
-                    onClick={() => onVenueTypeChange(v)}
+                    onClick={() => onVenueTypeChange(v.value)}
                   >
-                    {v}
+                    {v.label}
                   </Button>
                 ))}
               </div>
             </div>
             <div className="space-y-1">
-              <span className="text-xs font-medium text-muted-foreground">Period</span>
+              <span className="text-xs font-medium text-muted-foreground">时段</span>
               <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
                 {timeOptions.map((t) => (
                   <Button
-                    key={t}
+                    key={t.value}
                     size="sm"
-                    variant={timePeriod === t ? "default" : "outline"}
+                    variant={timePeriod === t.value ? "default" : "outline"}
                     className={cn(
                       "h-7 px-3 text-xs shrink-0 rounded-full",
-                      timePeriod !== t && "text-muted-foreground"
+                      timePeriod !== t.value && "text-muted-foreground"
                     )}
-                    onClick={() => onTimePeriodChange(t)}
+                    onClick={() => onTimePeriodChange(t.value)}
                   >
-                    {t}
+                    {t.label}
                   </Button>
                 ))}
               </div>
