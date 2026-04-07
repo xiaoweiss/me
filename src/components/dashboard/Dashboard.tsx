@@ -6,6 +6,8 @@ import { FilterBar } from "./FilterBar";
 import { DayCell } from "./DayCell";
 import { DayDrawer } from "./DayDrawer";
 import { VenueBookingDrawer } from "./VenueBookingDrawer";
+import { CityEventDrawer } from "./CityEventDrawer";
+import { CompetitorDrawer } from "./CompetitorDrawer";
 import { Legend } from "./Legend";
 import { fetchMonthData, fetchThresholds } from "@/api/dashboardApi";
 import type { DayData, VenueType, TimePeriod, Filters, ThresholdBand } from "@/api/types";
@@ -26,6 +28,10 @@ export function Dashboard() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [venueDrawerDate, setVenueDrawerDate] = useState<string | null>(null);
   const [venueDrawerOpen, setVenueDrawerOpen] = useState(false);
+  const [cityEventDate, setCityEventDate] = useState<string | null>(null);
+  const [cityEventOpen, setCityEventOpen] = useState(false);
+  const [compDate, setCompDate] = useState<string | null>(null);
+  const [compOpen, setCompOpen] = useState(false);
 
   useEffect(() => {
     fetchThresholds().then(setThresholds);
@@ -49,6 +55,16 @@ export function Dashboard() {
   const handleMyHotelClick = (date: string) => {
     setVenueDrawerDate(date);
     setVenueDrawerOpen(true);
+  };
+
+  const handleCityEventClick = (date: string) => {
+    setCityEventDate(date);
+    setCityEventOpen(true);
+  };
+
+  const handleCompetitorClick = (date: string) => {
+    setCompDate(date);
+    setCompOpen(true);
   };
 
   const firstDayOfWeek = new Date(year, month, 1).getDay();
