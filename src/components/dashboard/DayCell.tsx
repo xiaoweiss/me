@@ -37,38 +37,63 @@ export function DayCell({ day, mode, onClick, onMyHotelClick, onCityEventClick, 
     const overallValue = mode === "occupancy" ? day.myHotelRate : day.newBookingCount;
     const color = getThresholdColor(overallValue, thresholds);
 
+    const periodValues = mode === "occupancy" ? day.periodOccupancy : day.periodBookings;
+    const compVal = mode === "occupancy" ? `${day.competitorAvgRate}%` : day.competitorSumBookings;
+    const mktVal = mode === "occupancy" ? `${day.marketAvgRate}%` : day.marketSumBookings;
+
     return (
       <div
-        className="relative flex flex-col items-center justify-center rounded-md cursor-pointer overflow-hidden aspect-square"
-        style={{ backgroundColor: `hsl(${color} / 0.22)` }}
+        className="relative flex flex-col rounded-md cursor-pointer overflow-hidden"
+        style={{ backgroundColor: `hsl(${color} / 0.15)`, minHeight: "72px" }}
         onClick={() => onClick(day.date)}
       >
-        {/* Day number top-left */}
-        <span className="absolute top-0.5 left-1 text-[8px] font-medium text-muted-foreground">
-          {dayNum}
-        </span>
+        {/* Row 1: day number + city event badge */}
+        <div className="flex items-center justify-between px-1 pt-0.5">
+          <span className="text-[8px] font-medium text-muted-foreground">{dayNum}</span>
+          {day.cityEventCount > 0 && (
+            <Badge
+              variant="secondary"
+              className="h-3 min-w-3 px-0.5 text-[7px] font-semibold cursor-pointer hover:bg-secondary/80"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCityEventClick?.(day.date);
+              }}
+            >
+              {day.cityEventCount}
+            </Badge>
+          )}
+        </div>
 
-        {/* City event badge top-right */}
-        {day.cityEventCount > 0 && (
-          <Badge
-            variant="secondary"
-            className="absolute top-0.5 right-0.5 h-3 min-w-3 px-0.5 text-[7px] font-semibold cursor-pointer hover:bg-secondary/80"
-            onClick={(e) => {
-              e.stopPropagation();
-              onCityEventClick?.(day.date);
-            }}
+        {/* Row 2: main value centered */}
+        <div className="flex-1 flex items-center justify-center">
+          <span
+            className="font-bold font-display text-sm leading-none"
+            style={{ color: `hsl(${color})` }}
           >
-            {day.cityEventCount}
-          </Badge>
-        )}
+            {mode === "occupancy" ? `${overallValue}%` : overallValue}
+          </span>
+        </div>
 
-        {/* Main value centered */}
-        <span
-          className="font-bold font-display text-sm leading-none"
-          style={{ color: `hsl(${color})` }}
-        >
-          {mode === "occupancy" ? `${overallValue}%` : overallValue}
-        </span>
+        {/* Row 3: M/A/E color dots */}
+        <div className="flex items-center justify-center gap-1.5 pb-0.5">
+          {PERIODS.map((p) => {
+            const val = periodValues[p];
+            const dotColor = getThresholdColor(val, thresholds);
+            return (
+              <span
+                key={p}
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: `hsl(${dotColor})` }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Row 4: C / M small text */}
+        <div className="flex items-center justify-center gap-1 pb-1">
+          <span className="text-[7px] text-muted-foreground font-medium">C:{compVal}</span>
+          <span className="text-[7px] text-muted-foreground font-medium">M:{mktVal}</span>
+        </div>
       </div>
     );
   }
