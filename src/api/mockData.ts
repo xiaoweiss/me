@@ -11,6 +11,7 @@ const venues = ["Grand Ballroom", "Sapphire Hall", "Conference Room A", "Confere
 const eventTypes = ["Conference", "Gala", "Expo", "Corporate", "Social", "Training"];
 const competitorHotels = ["Marriott Grand", "Hilton Central", "Hyatt Regency", "IHG Suites", "Radisson Blu"];
 const activityTypes = ["Meetings", "Conferences", "Banquets", "Workshops", "Social Events"];
+const activityNames = ["婚宴", "年会", "培训", "产品发布会", "董事会", "研讨会", "鸡尾酒会", "颁奖典礼"];
 
 function seededRandom(seed: number) {
   let s = seed;
