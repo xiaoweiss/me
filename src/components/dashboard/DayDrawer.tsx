@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { fetchDayDetail } from "@/api/dashboardApi";
 import type { DayDetail } from "@/api/types";
-import { CalendarDays, Building2, MapPin } from "lucide-react";
+import { CalendarDays, Building2, MapPin, ChevronDown } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface DayDrawerProps {
@@ -49,13 +50,34 @@ function DetailContent({ detail, loading }: { detail: DayDetail | null; loading:
         </h3>
         <div className="space-y-2">
           {detail.competitors.map((c, i) => (
-            <div key={i} className="flex items-center justify-between rounded-lg border bg-card p-3">
-              <div>
-                <p className="font-medium text-sm">{c.hotelName}</p>
-                <p className="text-xs text-muted-foreground">{c.activityType}</p>
-              </div>
-              <Badge className="font-display">×{c.count}</Badge>
-            </div>
+            <Collapsible key={i}>
+              <CollapsibleTrigger className="w-full">
+                <div className="flex items-center justify-between rounded-lg border bg-card p-3 hover:bg-accent/50 transition-colors group">
+                  <div className="text-left">
+                    <p className="font-medium text-sm">{c.hotelName}</p>
+                    <p className="text-xs text-muted-foreground">{c.activityType}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="font-display">×{c.count}</Badge>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                  </div>
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="ml-3 border-l-2 border-border pl-3 py-1 space-y-1">
+                  {c.activities.map((act, j) => (
+                    <div key={j} className="flex items-start gap-1.5 text-xs text-muted-foreground py-1">
+                      <span className="text-border mt-0.5">{j === c.activities.length - 1 ? "└" : "├"}──</span>
+                      <span className="text-foreground font-medium">{act.name}</span>
+                      <span>·</span>
+                      <span>{act.date}</span>
+                      <span>·</span>
+                      <span>{act.venue}</span>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           ))}
         </div>
       </section>

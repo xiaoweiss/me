@@ -11,6 +11,7 @@ const venues = ["Grand Ballroom", "Sapphire Hall", "Conference Room A", "Confere
 const eventTypes = ["Conference", "Gala", "Expo", "Corporate", "Social", "Training"];
 const competitorHotels = ["Marriott Grand", "Hilton Central", "Hyatt Regency", "IHG Suites", "Radisson Blu"];
 const activityTypes = ["Meetings", "Conferences", "Banquets", "Workshops", "Social Events"];
+const activityNames = ["婚宴", "年会", "培训", "产品发布会", "董事会", "研讨会", "鸡尾酒会", "颁奖典礼"];
 
 function seededRandom(seed: number) {
   let s = seed;
@@ -59,11 +60,26 @@ export function generateDayDetail(dateStr: string): DayDetail {
   }));
 
   const numComp = 2 + Math.floor(rand() * 4);
-  const competitors: CompetitorDetail[] = Array.from({ length: numComp }, () => ({
-    hotelName: competitorHotels[Math.floor(rand() * competitorHotels.length)],
-    activityType: activityTypes[Math.floor(rand() * activityTypes.length)],
-    count: 1 + Math.floor(rand() * 8),
-  }));
+  const competitors: CompetitorDetail[] = Array.from({ length: numComp }, () => {
+    const count = 1 + Math.floor(rand() * 8);
+    const activities = Array.from({ length: count }, () => {
+      const dayOffset = Math.floor(rand() * 28);
+      const parts = dateStr.split("-");
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1 + dayOffset);
+      const actDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      return {
+        name: activityNames[Math.floor(rand() * activityNames.length)],
+        date: actDate,
+        venue: venues[Math.floor(rand() * venues.length)],
+      };
+    });
+    return {
+      hotelName: competitorHotels[Math.floor(rand() * competitorHotels.length)],
+      activityType: activityTypes[Math.floor(rand() * activityTypes.length)],
+      count,
+      activities,
+    };
+  });
 
   return { date: dateStr, cityEvents, competitors };
 }

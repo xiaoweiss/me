@@ -17,10 +17,17 @@ export interface CityEvent {
   type: string;
 }
 
+export interface CompetitorActivity {
+  name: string;
+  date: string;
+  venue: string;
+}
+
 export interface CompetitorDetail {
   hotelName: string;
   activityType: string;
   count: number;
+  activities: CompetitorActivity[];
 }
 
 export interface DayDetail {
