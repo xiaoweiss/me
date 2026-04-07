@@ -38,8 +38,6 @@ export function DayCell({ day, mode, onClick, onMyHotelClick, onCityEventClick, 
     const color = getThresholdColor(overallValue, thresholds);
 
     const periodValues = mode === "occupancy" ? day.periodOccupancy : day.periodBookings;
-    const compVal = mode === "occupancy" ? `${day.competitorAvgRate}%` : day.competitorSumBookings;
-    const mktVal = mode === "occupancy" ? `${day.marketAvgRate}%` : day.marketSumBookings;
 
     return (
       <div
@@ -89,11 +87,6 @@ export function DayCell({ day, mode, onClick, onMyHotelClick, onCityEventClick, 
           })}
         </div>
 
-        {/* Row 4: C / M small text */}
-        <div className="flex items-center justify-center gap-1 pb-1">
-          <span className="text-[7px] text-muted-foreground font-medium">C:{compVal}</span>
-          <span className="text-[7px] text-muted-foreground font-medium">M:{mktVal}</span>
-        </div>
       </div>
     );
   }
@@ -162,7 +155,7 @@ export function DayCell({ day, mode, onClick, onMyHotelClick, onCityEventClick, 
           }}
         >
           <span className="text-[9px] font-semibold text-foreground">
-            My: {mode === "occupancy" ? `${day.myHotelRate}%` : day.newBookingCount}
+            本酒店: {mode === "occupancy" ? `${day.myHotelRate}%` : day.newBookingCount}
           </span>
         </button>
         <div className="flex items-center gap-1">

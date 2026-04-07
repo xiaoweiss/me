@@ -26,7 +26,7 @@ function DetailContent({ detail, loading }: { detail: DayDetail | null; loading:
       <section>
         <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
           <MapPin className="h-4 w-4 text-primary" />
-          城市活动 City Events
+          城市活动
         </h3>
         <div className="space-y-2">
           {detail.cityEvents.map((e, i) => (
