@@ -1,4 +1,4 @@
-import type { DayData, DayDetail, CityEvent, CompetitorDetail } from "./types";
+import type { DayData, DayDetail, CityEvent, CompetitorDetail, ThresholdBand, VenueBooking } from "./types";
 
 const eventNames = [
   "Tech Summit 2026", "Annual Charity Gala", "Medical Conference",
@@ -21,6 +21,14 @@ function seededRandom(seed: number) {
   };
 }
 
+export function generateThresholds(): ThresholdBand[] {
+  return [
+    { min: 0, max: 60, color: "0 72% 51%", label: "<60%" },
+    { min: 60, max: 80, color: "40 90% 50%", label: "60-80%" },
+    { min: 80, max: 100, color: "142 64% 42%", label: ">80%" },
+  ];
+}
+
 export function generateMonthData(year: number, month: number): DayData[] {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const rand = seededRandom(year * 100 + month);
@@ -32,18 +40,35 @@ export function generateMonthData(year: number, month: number): DayData[] {
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
     const baseOcc = isWeekend ? 40 + rand() * 40 : 55 + rand() * 40;
     const occ = Math.round(Math.min(100, Math.max(10, baseOcc)));
+
+    const amOcc = Math.round(Math.min(100, Math.max(5, occ + (rand() - 0.5) * 30)));
+    const pmOcc = Math.round(Math.min(100, Math.max(5, occ + (rand() - 0.5) * 25)));
+    const evOcc = Math.round(Math.min(100, Math.max(5, occ + (rand() - 0.5) * 35)));
+
     const myRate = occ;
     const compRate = Math.round(Math.min(100, Math.max(10, occ + (rand() - 0.5) * 20)));
     const marketRate = Math.round(Math.min(100, Math.max(10, occ + (rand() - 0.5) * 15)));
 
+    const bookings = Math.floor(rand() * 12);
+    const amBook = Math.floor(rand() * 5);
+    const pmBook = Math.floor(rand() * 5);
+    const evBook = Math.floor(rand() * 4);
+
+    const compSumBookings = Math.floor(rand() * 40) + 5;
+    const marketSumBookings = Math.floor(rand() * 60) + 10;
+
     days.push({
       date: dateStr,
       occupancyRate: occ,
+      periodOccupancy: { AM: amOcc, PM: pmOcc, EV: evOcc },
       cityEventCount: Math.floor(rand() * 5),
-      newBookingCount: Math.floor(rand() * 12),
+      newBookingCount: bookings,
+      periodBookings: { AM: amBook, PM: pmBook, EV: evBook },
       myHotelRate: myRate,
       competitorAvgRate: compRate,
       marketAvgRate: marketRate,
+      competitorSumBookings: compSumBookings,
+      marketSumBookings: marketSumBookings,
     });
   }
   return days;
@@ -65,8 +90,8 @@ export function generateDayDetail(dateStr: string): DayDetail {
     const activities = Array.from({ length: count }, () => {
       const dayOffset = Math.floor(rand() * 28);
       const parts = dateStr.split("-");
-      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1 + dayOffset);
-      const actDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const dd = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, 1 + dayOffset);
+      const actDate = `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(dd.getDate()).padStart(2, "0")}`;
       return {
         name: activityNames[Math.floor(rand() * activityNames.length)],
         date: actDate,
@@ -81,5 +106,16 @@ export function generateDayDetail(dateStr: string): DayDetail {
     };
   });
 
-  return { date: dateStr, cityEvents, competitors };
+  const periods: ("AM" | "PM" | "EV")[] = ["AM", "PM", "EV"];
+  const venueBookings: VenueBooking[] = [];
+  const numBookings = 3 + Math.floor(rand() * 6);
+  for (let i = 0; i < numBookings; i++) {
+    venueBookings.push({
+      venueName: venues[Math.floor(rand() * venues.length)],
+      period: periods[Math.floor(rand() * 3)],
+      activityType: activityTypes[Math.floor(rand() * activityTypes.length)],
+    });
+  }
+
+  return { date: dateStr, cityEvents, competitors, venueBookings };
 }

@@ -1,4 +1,4 @@
-import type { DayData } from "@/api/types";
+import type { DayData, ThresholdBand, TimePeriod } from "@/api/types";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -6,61 +6,108 @@ interface DayCellProps {
   day: DayData;
   mode: "occupancy" | "bookings";
   onClick: (date: string) => void;
+  onMyHotelClick?: (date: string) => void;
   compact?: boolean;
+  thresholds: ThresholdBand[];
+  highlightPeriod: TimePeriod;
 }
 
-function getOccupancyColor(rate: number) {
-  if (rate >= 80) return "bg-occ-high/15 border-occ-high/40 hover:border-occ-high";
-  if (rate >= 60) return "bg-occ-mid/15 border-occ-mid/40 hover:border-occ-mid";
-  return "bg-occ-low/15 border-occ-low/40 hover:border-occ-low";
+const PERIODS: ("AM" | "PM" | "EV")[] = ["AM", "PM", "EV"];
+const PERIOD_LABELS = { AM: "M", PM: "A", EV: "E" };
+
+function getThresholdColor(value: number, thresholds: ThresholdBand[]): string {
+  for (const t of thresholds) {
+    if (value >= t.min && value < t.max) return t.color;
+  }
+  // fallback to last band for max boundary
+  const last = thresholds[thresholds.length - 1];
+  if (last && value >= last.min) return last.color;
+  return thresholds[0]?.color ?? "0 0% 50%";
 }
 
-function getOccupancyTextColor(rate: number) {
-  if (rate >= 80) return "text-occ-high";
-  if (rate >= 60) return "text-occ-mid";
-  return "text-occ-low";
-}
-
-export function DayCell({ day, mode, onClick, compact = false }: DayCellProps) {
+export function DayCell({ day, mode, onClick, onMyHotelClick, compact = false, thresholds, highlightPeriod }: DayCellProps) {
   const dateObj = new Date(day.date + "T00:00:00");
   const dayNum = dateObj.getDate();
-  const value = mode === "occupancy" ? day.occupancyRate : day.newBookingCount;
+
+  const periodValues = mode === "occupancy" ? day.periodOccupancy : day.periodBookings;
 
   return (
-    <button
-      onClick={() => onClick(day.date)}
+    <div
       className={cn(
-        "relative flex flex-col items-center justify-center rounded-lg border transition-all cursor-pointer",
-        compact ? "p-1.5 min-h-[52px]" : "p-2 min-h-[88px]",
-        mode === "occupancy" ? getOccupancyColor(day.occupancyRate) : "bg-card border-border hover:border-primary/50"
+        "relative flex flex-col rounded-lg border bg-card transition-all cursor-pointer overflow-hidden",
+        compact ? "min-h-[60px]" : "min-h-[100px]"
       )}
+      onClick={() => onClick(day.date)}
     >
-      <span className={cn("font-medium text-muted-foreground", compact ? "text-[10px]" : "text-[11px]")}>{dayNum}</span>
-      <span className={cn(
-        "font-bold font-display leading-tight",
-        compact ? "text-sm" : "text-lg",
-        mode === "occupancy" ? getOccupancyTextColor(day.occupancyRate) : "text-foreground"
-      )}>
-        {mode === "occupancy" ? `${value}%` : value}
-      </span>
+      {/* Day number + event badge */}
+      <div className="flex items-center justify-between px-1.5 pt-1">
+        <span className={cn("font-medium text-muted-foreground", compact ? "text-[9px]" : "text-[10px]")}>{dayNum}</span>
+        {day.cityEventCount > 0 && (
+          <Badge variant="secondary" className={cn(
+            "font-semibold",
+            compact ? "h-3.5 min-w-3.5 px-0.5 text-[7px]" : "h-4 min-w-4 px-0.5 text-[9px]"
+          )}>
+            {day.cityEventCount}
+          </Badge>
+        )}
+      </div>
 
-      {/* Comp & Market lines — desktop only, occupancy mode */}
-      {!compact && mode === "occupancy" && (
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <span className="text-[9px] text-chart-comp font-medium">C:{day.competitorAvgRate}%</span>
-          <span className="text-[9px] text-muted-foreground">|</span>
-          <span className="text-[9px] text-chart-market font-medium">M:{day.marketAvgRate}%</span>
+      {/* Three-column M/A/E grid */}
+      <div className="flex-1 grid grid-cols-3 gap-px px-0.5 pb-0.5">
+        {PERIODS.map((p) => {
+          const val = periodValues[p];
+          const color = getThresholdColor(val, thresholds);
+          const isHighlighted = highlightPeriod === "All" || highlightPeriod === p;
+
+          return (
+            <div
+              key={p}
+              className={cn(
+                "flex flex-col items-center justify-center rounded-sm transition-opacity",
+                !isHighlighted && "opacity-30"
+              )}
+              style={{ backgroundColor: `hsl(${color} / 0.18)` }}
+            >
+              <span className={cn("font-medium text-muted-foreground", compact ? "text-[7px]" : "text-[8px]")}>
+                {PERIOD_LABELS[p]}
+              </span>
+              <span
+                className={cn("font-bold font-display leading-tight", compact ? "text-[10px]" : "text-xs")}
+                style={{ color: `hsl(${color})` }}
+              >
+                {mode === "occupancy" ? `${val}%` : val}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* My Hotel clickable row + Comp/Market — desktop only */}
+      {!compact && (
+        <div className="border-t px-1.5 py-0.5 space-y-px">
+          <button
+            type="button"
+            className="w-full text-left hover:bg-accent/50 rounded-sm px-0.5 -mx-0.5 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMyHotelClick?.(day.date);
+            }}
+          >
+            <span className="text-[9px] font-semibold text-foreground">
+              My: {mode === "occupancy" ? `${day.myHotelRate}%` : day.newBookingCount}
+            </span>
+          </button>
+          <div className="flex items-center gap-1">
+            <span className="text-[8px] text-chart-comp font-medium">
+              C:{mode === "occupancy" ? `${day.competitorAvgRate}%` : day.competitorSumBookings}
+            </span>
+            <span className="text-[8px] text-muted-foreground">|</span>
+            <span className="text-[8px] text-chart-market font-medium">
+              M:{mode === "occupancy" ? `${day.marketAvgRate}%` : day.marketSumBookings}
+            </span>
+          </div>
         </div>
       )}
-
-      {day.cityEventCount > 0 && (
-        <Badge variant="secondary" className={cn(
-          "absolute font-semibold",
-          compact ? "-top-1 -right-1 h-4 min-w-4 px-0.5 text-[8px]" : "-top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px]"
-        )}>
-          {day.cityEventCount}
-        </Badge>
-      )}
-    </button>
+    </div>
   );
 }

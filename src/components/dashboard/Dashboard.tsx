@@ -5,11 +5,11 @@ import { MonthYearSelector } from "./MonthYearSelector";
 import { FilterBar } from "./FilterBar";
 import { DayCell } from "./DayCell";
 import { DayDrawer } from "./DayDrawer";
+import { VenueBookingDrawer } from "./VenueBookingDrawer";
 import { Legend } from "./Legend";
-import { fetchMonthData } from "@/api/dashboardApi";
-import type { DayData, VenueType, TimePeriod, Filters } from "@/api/types";
+import { fetchMonthData, fetchThresholds } from "@/api/dashboardApi";
+import type { DayData, VenueType, TimePeriod, Filters, ThresholdBand } from "@/api/types";
 import { BarChart3, CalendarRange } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -21,9 +21,15 @@ export function Dashboard() {
   const [timePeriod, setTimePeriod] = useState<TimePeriod>("All");
   const [mode, setMode] = useState<"occupancy" | "bookings">("occupancy");
   const [days, setDays] = useState<DayData[]>([]);
+  const [thresholds, setThresholds] = useState<ThresholdBand[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const isMobile = useIsMobile();
+  const [venueDrawerDate, setVenueDrawerDate] = useState<string | null>(null);
+  const [venueDrawerOpen, setVenueDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    fetchThresholds().then(setThresholds);
+  }, []);
 
   const loadData = useCallback(async () => {
     const filters: Filters = { venueType, timePeriod, month, year };
@@ -38,6 +44,11 @@ export function Dashboard() {
   const handleDayClick = (date: string) => {
     setSelectedDate(date);
     setDrawerOpen(true);
+  };
+
+  const handleMyHotelClick = (date: string) => {
+    setVenueDrawerDate(date);
+    setVenueDrawerOpen(true);
   };
 
   const firstDayOfWeek = new Date(year, month, 1).getDay();
@@ -85,9 +96,9 @@ export function Dashboard() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-display">
-              {mode === "occupancy" ? "Monthly Occupancy Rate" : "New Booking Count"}
+              {mode === "occupancy" ? "Monthly Occupancy Rate" : "Activity Count"}
             </CardTitle>
-            {mode === "occupancy" && <Legend days={days} />}
+            <Legend days={days} thresholds={thresholds} mode={mode} />
           </CardHeader>
           <CardContent>
             {/* Day headers */}
@@ -101,14 +112,22 @@ export function Dashboard() {
             <div className="hidden sm:grid grid-cols-7 gap-2">
               {gridCells.map((cell, i) =>
                 cell ? (
-                  <DayCell key={cell.date} day={cell} mode={mode} onClick={handleDayClick} />
+                  <DayCell
+                    key={cell.date}
+                    day={cell}
+                    mode={mode}
+                    onClick={handleDayClick}
+                    onMyHotelClick={handleMyHotelClick}
+                    thresholds={thresholds}
+                    highlightPeriod={timePeriod}
+                  />
                 ) : (
                   <div key={`empty-${i}`} />
                 )
               )}
             </div>
 
-            {/* Mobile: compact 7-column grid */}
+            {/* Mobile grid */}
             <div className="sm:hidden">
               <div className="grid grid-cols-7 gap-1 mb-1">
                 {DAY_NAMES.map((d) => (
@@ -118,7 +137,15 @@ export function Dashboard() {
               <div className="grid grid-cols-7 gap-1">
                 {gridCells.map((cell, i) =>
                   cell ? (
-                    <DayCell key={cell.date} day={cell} mode={mode} onClick={handleDayClick} compact />
+                    <DayCell
+                      key={cell.date}
+                      day={cell}
+                      mode={mode}
+                      onClick={handleDayClick}
+                      compact
+                      thresholds={thresholds}
+                      highlightPeriod={timePeriod}
+                    />
                   ) : (
                     <div key={`empty-m-${i}`} />
                   )
@@ -130,6 +157,7 @@ export function Dashboard() {
       </main>
 
       <DayDrawer date={selectedDate} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <VenueBookingDrawer date={venueDrawerDate} open={venueDrawerOpen} onClose={() => setVenueDrawerOpen(false)} />
     </div>
   );
 }
