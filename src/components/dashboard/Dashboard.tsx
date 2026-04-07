@@ -9,6 +9,7 @@ import { Legend } from "./Legend";
 import { fetchMonthData } from "@/api/dashboardApi";
 import type { DayData, VenueType, TimePeriod, Filters } from "@/api/types";
 import { BarChart3, CalendarRange } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -22,6 +23,7 @@ export function Dashboard() {
   const [days, setDays] = useState<DayData[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const loadData = useCallback(async () => {
     const filters: Filters = { venueType, timePeriod, month, year };
@@ -38,7 +40,6 @@ export function Dashboard() {
     setDrawerOpen(true);
   };
 
-  // Build calendar grid with leading empty slots
   const firstDayOfWeek = new Date(year, month, 1).getDay();
   const gridCells: (DayData | null)[] = [
     ...Array(firstDayOfWeek).fill(null),
@@ -107,11 +108,22 @@ export function Dashboard() {
               )}
             </div>
 
-            {/* Mobile vertical list */}
-            <div className="sm:hidden space-y-2">
-              {days.map((day) => (
-                <DayCell key={day.date} day={day} mode={mode} onClick={handleDayClick} />
-              ))}
+            {/* Mobile: compact 7-column grid */}
+            <div className="sm:hidden">
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {DAY_NAMES.map((d) => (
+                  <div key={d} className="text-center text-[10px] font-medium text-muted-foreground py-0.5">{d.charAt(0)}</div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {gridCells.map((cell, i) =>
+                  cell ? (
+                    <DayCell key={cell.date} day={cell} mode={mode} onClick={handleDayClick} compact />
+                  ) : (
+                    <div key={`empty-m-${i}`} />
+                  )
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
