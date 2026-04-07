@@ -8,10 +8,12 @@ import { DayDrawer } from "./DayDrawer";
 import { VenueBookingDrawer } from "./VenueBookingDrawer";
 import { CityEventDrawer } from "./CityEventDrawer";
 import { CompetitorDrawer } from "./CompetitorDrawer";
+import { MobileDayDrawer } from "./MobileDayDrawer";
 import { Legend } from "./Legend";
 import { fetchMonthData, fetchThresholds } from "@/api/dashboardApi";
 import type { DayData, VenueType, TimePeriod, Filters, ThresholdBand } from "@/api/types";
 import { BarChart3, CalendarRange } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
