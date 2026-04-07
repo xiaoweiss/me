@@ -57,6 +57,20 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        occ: {
+          low: "hsl(var(--occ-low))",
+          mid: "hsl(var(--occ-mid))",
+          high: "hsl(var(--occ-high))",
+        },
+        chart: {
+          mine: "hsl(var(--chart-line-mine))",
+          comp: "hsl(var(--chart-line-comp))",
+          market: "hsl(var(--chart-line-market))",
+        },
+      },
+      fontFamily: {
+        sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
       },
       borderRadius: {
         lg: "var(--radius)",
