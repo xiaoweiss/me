@@ -1,6 +1,8 @@
+import { useState } from "react";
 import type { VenueType, TimePeriod } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { SlidersHorizontal, X } from "lucide-react";
 
 interface FilterBarProps {
   venueType: VenueType;
@@ -13,8 +15,10 @@ const venueOptions: VenueType[] = ["All", "Ballroom", "Conference Room"];
 const timeOptions: TimePeriod[] = ["All", "AM", "PM", "EV"];
 
 export function FilterBar({ venueType, timePeriod, onVenueTypeChange, onTimePeriodChange }: FilterBarProps) {
-  return (
-    <div className="flex flex-wrap items-center gap-6">
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const filterContent = (
+    <>
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium text-muted-foreground">Venue</span>
         <div className="flex gap-1 rounded-lg bg-muted p-1">
@@ -47,6 +51,36 @@ export function FilterBar({ venueType, timePeriod, onVenueTypeChange, onTimePeri
           ))}
         </div>
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop */}
+      <div className="hidden sm:flex flex-wrap items-center gap-6">
+        {filterContent}
+      </div>
+
+      {/* Mobile */}
+      <div className="sm:hidden">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setMobileOpen(!mobileOpen)}
+        >
+          {mobileOpen ? <X className="h-4 w-4" /> : <SlidersHorizontal className="h-4 w-4" />}
+          筛选
+          {(venueType !== "All" || timePeriod !== "All") && (
+            <span className="ml-1 h-2 w-2 rounded-full bg-primary" />
+          )}
+        </Button>
+        {mobileOpen && (
+          <div className="mt-3 flex flex-col gap-3 rounded-lg border bg-card p-3">
+            {filterContent}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

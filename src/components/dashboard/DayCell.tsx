@@ -6,6 +6,7 @@ interface DayCellProps {
   day: DayData;
   mode: "occupancy" | "bookings";
   onClick: (date: string) => void;
+  compact?: boolean;
 }
 
 function getOccupancyColor(rate: number) {
@@ -20,7 +21,7 @@ function getOccupancyTextColor(rate: number) {
   return "text-occ-low";
 }
 
-export function DayCell({ day, mode, onClick }: DayCellProps) {
+export function DayCell({ day, mode, onClick, compact = false }: DayCellProps) {
   const dateObj = new Date(day.date + "T00:00:00");
   const dayNum = dateObj.getDate();
   const value = mode === "occupancy" ? day.occupancyRate : day.newBookingCount;
@@ -29,19 +30,34 @@ export function DayCell({ day, mode, onClick }: DayCellProps) {
     <button
       onClick={() => onClick(day.date)}
       className={cn(
-        "relative flex flex-col items-center justify-center rounded-lg border p-2 transition-all cursor-pointer min-h-[72px]",
+        "relative flex flex-col items-center justify-center rounded-lg border transition-all cursor-pointer",
+        compact ? "p-1.5 min-h-[52px]" : "p-2 min-h-[88px]",
         mode === "occupancy" ? getOccupancyColor(day.occupancyRate) : "bg-card border-border hover:border-primary/50"
       )}
     >
-      <span className="text-[11px] font-medium text-muted-foreground">{dayNum}</span>
+      <span className={cn("font-medium text-muted-foreground", compact ? "text-[10px]" : "text-[11px]")}>{dayNum}</span>
       <span className={cn(
-        "text-lg font-bold font-display",
+        "font-bold font-display leading-tight",
+        compact ? "text-sm" : "text-lg",
         mode === "occupancy" ? getOccupancyTextColor(day.occupancyRate) : "text-foreground"
       )}>
         {mode === "occupancy" ? `${value}%` : value}
       </span>
+
+      {/* Comp & Market lines — desktop only, occupancy mode */}
+      {!compact && mode === "occupancy" && (
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-[9px] text-chart-comp font-medium">C:{day.competitorAvgRate}%</span>
+          <span className="text-[9px] text-muted-foreground">|</span>
+          <span className="text-[9px] text-chart-market font-medium">M:{day.marketAvgRate}%</span>
+        </div>
+      )}
+
       {day.cityEventCount > 0 && (
-        <Badge variant="secondary" className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px] font-semibold">
+        <Badge variant="secondary" className={cn(
+          "absolute font-semibold",
+          compact ? "-top-1 -right-1 h-4 min-w-4 px-0.5 text-[8px]" : "-top-1.5 -right-1.5 h-5 min-w-5 px-1 text-[10px]"
+        )}>
           {day.cityEventCount}
         </Badge>
       )}
