@@ -18,6 +18,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function Dashboard() {
+  const isMobile = useIsMobile();
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
@@ -34,6 +35,8 @@ export function Dashboard() {
   const [cityEventOpen, setCityEventOpen] = useState(false);
   const [compDate, setCompDate] = useState<string | null>(null);
   const [compOpen, setCompOpen] = useState(false);
+  const [mobileDayData, setMobileDayData] = useState<DayData | null>(null);
+  const [mobileDayOpen, setMobileDayOpen] = useState(false);
 
   useEffect(() => {
     fetchThresholds().then(setThresholds);
@@ -161,7 +164,14 @@ export function Dashboard() {
                       key={cell.date}
                       day={cell}
                       mode={mode}
-                      onClick={handleDayClick}
+                      onClick={(date) => {
+                        const dayData = days.find((d) => d.date === date);
+                        if (dayData) {
+                          setMobileDayData(dayData);
+                          setMobileDayOpen(true);
+                        }
+                      }}
+                      onCityEventClick={handleCityEventClick}
                       compact
                       thresholds={thresholds}
                       highlightPeriod={timePeriod}
@@ -180,6 +190,7 @@ export function Dashboard() {
       <VenueBookingDrawer date={venueDrawerDate} open={venueDrawerOpen} onClose={() => setVenueDrawerOpen(false)} />
       <CityEventDrawer date={cityEventDate} open={cityEventOpen} onClose={() => setCityEventOpen(false)} />
       <CompetitorDrawer date={compDate} open={compOpen} onClose={() => setCompOpen(false)} />
+      <MobileDayDrawer day={mobileDayData} open={mobileDayOpen} onClose={() => setMobileDayOpen(false)} mode={mode} thresholds={thresholds} />
     </div>
   );
 }
