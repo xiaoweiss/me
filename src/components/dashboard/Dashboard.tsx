@@ -134,6 +134,8 @@ export function Dashboard() {
                     mode={mode}
                     onClick={handleDayClick}
                     onMyHotelClick={handleMyHotelClick}
+                    onCityEventClick={handleCityEventClick}
+                    onCompetitorClick={handleCompetitorClick}
                     thresholds={thresholds}
                     highlightPeriod={timePeriod}
                   />
@@ -174,6 +176,8 @@ export function Dashboard() {
 
       <DayDrawer date={selectedDate} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
       <VenueBookingDrawer date={venueDrawerDate} open={venueDrawerOpen} onClose={() => setVenueDrawerOpen(false)} />
+      <CityEventDrawer date={cityEventDate} open={cityEventOpen} onClose={() => setCityEventOpen(false)} />
+      <CompetitorDrawer date={compDate} open={compOpen} onClose={() => setCompOpen(false)} />
     </div>
   );
 }
