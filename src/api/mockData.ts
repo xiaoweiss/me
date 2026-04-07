@@ -59,6 +59,7 @@ export function generateDayDetail(dateStr: string): DayDetail {
     type: eventTypes[Math.floor(rand() * eventTypes.length)],
   }));
 
+  const numComp = 2 + Math.floor(rand() * 4);
   const competitors: CompetitorDetail[] = Array.from({ length: numComp }, () => {
     const count = 1 + Math.floor(rand() * 8);
     const activities = Array.from({ length: count }, () => {
