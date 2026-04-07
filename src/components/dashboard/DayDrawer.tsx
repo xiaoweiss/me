@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { fetchDayDetail } from "@/api/dashboardApi";
 import type { DayDetail } from "@/api/types";
-import { CalendarDays, Building2, MapPin } from "lucide-react";
+import { CalendarDays, Building2, MapPin, ChevronDown } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface DayDrawerProps {
