@@ -7,6 +7,8 @@ interface DayCellProps {
   mode: "occupancy" | "bookings";
   onClick: (date: string) => void;
   onMyHotelClick?: (date: string) => void;
+  onCityEventClick?: (date: string) => void;
+  onCompetitorClick?: (date: string) => void;
   compact?: boolean;
   thresholds: ThresholdBand[];
   highlightPeriod: TimePeriod;
@@ -25,7 +27,7 @@ function getThresholdColor(value: number, thresholds: ThresholdBand[]): string {
   return thresholds[0]?.color ?? "0 0% 50%";
 }
 
-export function DayCell({ day, mode, onClick, onMyHotelClick, compact = false, thresholds, highlightPeriod }: DayCellProps) {
+export function DayCell({ day, mode, onClick, onMyHotelClick, onCityEventClick, onCompetitorClick, compact = false, thresholds, highlightPeriod }: DayCellProps) {
   const dateObj = new Date(day.date + "T00:00:00");
   const dayNum = dateObj.getDate();
 
@@ -43,10 +45,17 @@ export function DayCell({ day, mode, onClick, onMyHotelClick, compact = false, t
       <div className="flex items-center justify-between px-1.5 pt-1">
         <span className={cn("font-medium text-muted-foreground", compact ? "text-[9px]" : "text-[10px]")}>{dayNum}</span>
         {day.cityEventCount > 0 && (
-          <Badge variant="secondary" className={cn(
-            "font-semibold",
-            compact ? "h-3.5 min-w-3.5 px-0.5 text-[7px]" : "h-4 min-w-4 px-0.5 text-[9px]"
-          )}>
+          <Badge
+            variant="secondary"
+            className={cn(
+              "font-semibold cursor-pointer hover:bg-secondary/80",
+              compact ? "h-3.5 min-w-3.5 px-0.5 text-[7px]" : "h-4 min-w-4 px-0.5 text-[9px]"
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCityEventClick?.(day.date);
+            }}
+          >
             {day.cityEventCount}
           </Badge>
         )}
@@ -98,9 +107,16 @@ export function DayCell({ day, mode, onClick, onMyHotelClick, compact = false, t
             </span>
           </button>
           <div className="flex items-center gap-1">
-            <span className="text-[8px] text-chart-comp font-medium">
+            <button
+              type="button"
+              className="text-[8px] text-chart-comp font-medium hover:underline cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCompetitorClick?.(day.date);
+              }}
+            >
               C:{mode === "occupancy" ? `${day.competitorAvgRate}%` : day.competitorSumBookings}
-            </span>
+            </button>
             <span className="text-[8px] text-muted-foreground">|</span>
             <span className="text-[8px] text-chart-market font-medium">
               M:{mode === "occupancy" ? `${day.marketAvgRate}%` : day.marketSumBookings}
