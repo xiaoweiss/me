@@ -16,10 +16,9 @@ interface MobileDayDrawerProps {
   thresholds: ThresholdBand[];
 }
 
-const PERIODS: { key: "AM" | "PM" | "EV"; label: string }[] = [
+const PERIODS: { key: "AM" | "PM"; label: string }[] = [
   { key: "AM", label: "上午" },
   { key: "PM", label: "下午" },
-  { key: "EV", label: "晚上" },
 ];
 
 export function MobileDayDrawer({ day, open, onClose, mode, thresholds }: MobileDayDrawerProps) {

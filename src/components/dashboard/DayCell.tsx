@@ -14,8 +14,8 @@ interface DayCellProps {
   highlightPeriod: TimePeriod;
 }
 
-const PERIODS: ("AM" | "PM" | "EV")[] = ["AM", "PM", "EV"];
-const PERIOD_LABELS = { AM: "M", PM: "A", EV: "E" };
+const PERIODS: ("AM" | "PM")[] = ["AM", "PM"];
+const PERIOD_LABELS = { AM: "M", PM: "A" };
 
 export function getThresholdColor(value: number, thresholds: ThresholdBand[]): string {
   for (const t of thresholds) {
@@ -115,7 +115,7 @@ export function DayCell({ day, mode, onClick, onMyHotelClick, onCityEventClick, 
       </div>
 
       {/* Three-column M/A/E grid */}
-      <div className="flex-1 grid grid-cols-3 gap-px px-0.5 pb-0.5">
+      <div className="flex-1 grid grid-cols-2 gap-px px-0.5 pb-0.5">
         {PERIODS.map((p) => {
           const val = periodValues[p];
           const color = getThresholdColor(val, thresholds);
