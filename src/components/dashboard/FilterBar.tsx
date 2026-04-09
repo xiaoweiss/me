@@ -20,7 +20,6 @@ const timeOptions: { value: TimePeriod; label: string }[] = [
   { value: "All", label: "全部" },
   { value: "AM", label: "上午" },
   { value: "PM", label: "下午" },
-  { value: "EV", label: "晚上" },
 ];
 
 export function FilterBar({ venueType, timePeriod, onVenueTypeChange, onTimePeriodChange }: FilterBarProps) {
