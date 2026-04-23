@@ -1,65 +1,81 @@
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MonthYearSelector } from "./MonthYearSelector";
 import { FilterBar } from "./FilterBar";
 import { DayCell } from "./DayCell";
-import { DayDrawer } from "./DayDrawer";
-import { VenueBookingDrawer } from "./VenueBookingDrawer";
 import { CityEventDrawer } from "./CityEventDrawer";
 import { CompetitorDrawer } from "./CompetitorDrawer";
-import { MobileDayDrawer } from "./MobileDayDrawer";
 import { Legend } from "./Legend";
 import { fetchMonthData, fetchThresholds } from "@/api/dashboardApi";
-import type { DayData, VenueType, TimePeriod, Filters, ThresholdBand } from "@/api/types";
+import { useAuth } from "@/contexts/AuthContext";
+import type { DayData, Filters, ThresholdBand } from "@/api/types";
 import { BarChart3, CalendarRange } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 const DAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
 
+function dayHasData(d: DayData): boolean {
+  return (
+    d.cityEventCount > 0 ||
+    d.newBookingCount > 0 ||
+    d.competitorSumBookings > 0 ||
+    d.marketSumBookings > 0 ||
+    d.myHotelRate > 0 ||
+    d.competitorAvgRate > 0 ||
+    d.marketAvgRate > 0
+  );
+}
+
+function formatDateCN(dateStr: string): string {
+  // "2026-04-14" → "4月14日"
+  const [, m, d] = dateStr.split("-");
+  return `${parseInt(m)}月${parseInt(d)}日`;
+}
+
 export function Dashboard() {
-  const isMobile = useIsMobile();
+  const { auth } = useAuth();
+  const hotels = auth.status === "authenticated" ? auth.user.hotels ?? [] : [];
+  const hotelIds = auth.status === "authenticated" ? auth.user.hotelIds ?? [] : [];
+  const [selectedHotelId, setSelectedHotelId] = useState<number>(0);
+  const hotelId = selectedHotelId || hotelIds[0] || 0;
+  const city = "苏州";
+
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
   const [year, setYear] = useState(now.getFullYear());
-  const [venueType, setVenueType] = useState<VenueType>("All");
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>("All");
+  const [venueType, setVenueType] = useState("All");
   const [mode, setMode] = useState<"occupancy" | "bookings">("occupancy");
   const [days, setDays] = useState<DayData[]>([]);
   const [thresholds, setThresholds] = useState<ThresholdBand[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [venueDrawerDate, setVenueDrawerDate] = useState<string | null>(null);
-  const [venueDrawerOpen, setVenueDrawerOpen] = useState(false);
   const [cityEventDate, setCityEventDate] = useState<string | null>(null);
   const [cityEventOpen, setCityEventOpen] = useState(false);
   const [compDate, setCompDate] = useState<string | null>(null);
   const [compOpen, setCompOpen] = useState(false);
-  const [mobileDayData, setMobileDayData] = useState<DayData | null>(null);
-  const [mobileDayOpen, setMobileDayOpen] = useState(false);
 
   useEffect(() => {
-    fetchThresholds().then(setThresholds);
-  }, []);
+    if (hotelId) fetchThresholds(hotelId).then(setThresholds);
+  }, [hotelId]);
 
   const loadData = useCallback(async () => {
-    const filters: Filters = { venueType, timePeriod, month, year };
-    const data = await fetchMonthData(filters);
+    if (hotelIds.length === 0) return;
+    const filters: Filters = { venueType, timePeriod: "All", month, year };
+    const queryIds = selectedHotelId === 0 ? hotelIds : selectedHotelId;
+    const data = await fetchMonthData(queryIds, filters);
     setDays(data);
-  }, [venueType, timePeriod, month, year]);
+  }, [selectedHotelId, hotelIds, venueType, month, year]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  // 点击格子背景：按需求仅在「当天完全无数据」时 toast
+  // 有数据时什么都不做（用户应点击 🚩 或 C 徽标进入具体 drawer）
   const handleDayClick = (date: string) => {
-    setSelectedDate(date);
-    setDrawerOpen(true);
-  };
-
-  const handleMyHotelClick = (date: string) => {
-    setVenueDrawerDate(date);
-    setVenueDrawerOpen(true);
+    const d = days.find((x) => x.date === date);
+    if (!d || !dayHasData(d)) {
+      toast.info(`${formatDateCN(date)}暂无数据`);
+    }
   };
 
   const handleCityEventClick = (date: string) => {
@@ -81,16 +97,19 @@ export function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="container mx-auto flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="container mx-auto flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:py-5">
+          <div className="hidden sm:block">
             <h1 className="text-xl font-display font-bold text-foreground">会议室运营</h1>
             <p className="text-sm text-muted-foreground">出租率与竞对数据监控</p>
           </div>
-          <MonthYearSelector month={month} year={year} onMonthChange={setMonth} onYearChange={setYear} />
+          <div className="flex items-center justify-between sm:justify-end">
+            <h1 className="sm:hidden text-base font-display font-bold text-foreground">会议室运营</h1>
+            <MonthYearSelector month={month} year={year} onMonthChange={setMonth} onYearChange={setYear} />
+          </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-6 space-y-5">
+      <main className="container mx-auto px-2 py-3 space-y-3 sm:px-4 sm:py-6 sm:space-y-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <Tabs value={mode} onValueChange={(v) => setMode(v as "occupancy" | "bookings")} className="w-auto">
             <TabsList>
@@ -106,20 +125,21 @@ export function Dashboard() {
           </Tabs>
           <FilterBar
             venueType={venueType}
-            timePeriod={timePeriod}
             onVenueTypeChange={setVenueType}
-            onTimePeriodChange={setTimePeriod}
+            hotels={hotels}
+            selectedHotelId={selectedHotelId}
+            onHotelChange={setSelectedHotelId}
           />
         </div>
 
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-display">
+          <CardHeader className="pb-2 px-3 pt-3 sm:pb-3 sm:px-6 sm:pt-6">
+            <CardTitle className="text-sm sm:text-base font-display">
               {mode === "occupancy" ? "月度出租率" : "活动预订"}
             </CardTitle>
             <Legend days={days} thresholds={thresholds} mode={mode} />
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2 pb-3 sm:px-6 sm:pb-6">
             {/* Day headers */}
             <div className="hidden sm:grid grid-cols-7 gap-2 mb-2">
               {DAY_NAMES.map((d) => (
@@ -136,11 +156,10 @@ export function Dashboard() {
                     day={cell}
                     mode={mode}
                     onClick={handleDayClick}
-                    onMyHotelClick={handleMyHotelClick}
                     onCityEventClick={handleCityEventClick}
                     onCompetitorClick={handleCompetitorClick}
                     thresholds={thresholds}
-                    highlightPeriod={timePeriod}
+                    highlightPeriod="All"
                   />
                 ) : (
                   <div key={`empty-${i}`} />
@@ -150,29 +169,24 @@ export function Dashboard() {
 
             {/* Mobile grid */}
             <div className="sm:hidden">
-              <div className="grid grid-cols-7 gap-1 mb-1">
+              <div className="grid grid-cols-7 gap-0.5 mb-0.5">
                 {DAY_NAMES.map((d) => (
-                  <div key={d} className="text-center text-[10px] font-medium text-muted-foreground py-0.5">{d.charAt(0)}</div>
+                  <div key={d} className="text-center text-[10px] font-medium text-muted-foreground">{d.charAt(0)}</div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-0.5">
                 {gridCells.map((cell, i) =>
                   cell ? (
                     <DayCell
                       key={cell.date}
                       day={cell}
                       mode={mode}
-                      onClick={(date) => {
-                        const dayData = days.find((d) => d.date === date);
-                        if (dayData) {
-                          setMobileDayData(dayData);
-                          setMobileDayOpen(true);
-                        }
-                      }}
+                      onClick={handleDayClick}
                       onCityEventClick={handleCityEventClick}
+                      onCompetitorClick={handleCompetitorClick}
                       compact
                       thresholds={thresholds}
-                      highlightPeriod={timePeriod}
+                      highlightPeriod="All"
                     />
                   ) : (
                     <div key={`empty-m-${i}`} />
@@ -184,11 +198,8 @@ export function Dashboard() {
         </Card>
       </main>
 
-      <DayDrawer date={selectedDate} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-      <VenueBookingDrawer date={venueDrawerDate} open={venueDrawerOpen} onClose={() => setVenueDrawerOpen(false)} />
-      <CityEventDrawer date={cityEventDate} open={cityEventOpen} onClose={() => setCityEventOpen(false)} />
-      <CompetitorDrawer date={compDate} open={compOpen} onClose={() => setCompOpen(false)} />
-      <MobileDayDrawer day={mobileDayData} open={mobileDayOpen} onClose={() => setMobileDayOpen(false)} mode={mode} thresholds={thresholds} />
+      <CityEventDrawer date={cityEventDate} open={cityEventOpen} onClose={() => setCityEventOpen(false)} city={city} />
+      <CompetitorDrawer date={compDate} open={compOpen} onClose={() => setCompOpen(false)} hotelId={hotelId} />
     </div>
   );
 }

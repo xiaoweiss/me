@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Badge } from "@/components/ui/badge";
-import { fetchDayDetail } from "@/api/dashboardApi";
+import { fetchCityEvents } from "@/api/dashboardApi";
 import type { CityEvent } from "@/api/types";
 import { MapPin } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -11,6 +11,7 @@ interface CityEventDrawerProps {
   date: string | null;
   open: boolean;
   onClose: () => void;
+  city: string;
 }
 
 function EventContent({ events, loading }: { events: CityEvent[]; loading: boolean }) {
@@ -29,7 +30,7 @@ function EventContent({ events, loading }: { events: CityEvent[]; loading: boole
   );
 }
 
-export function CityEventDrawer({ date, open, onClose }: CityEventDrawerProps) {
+export function CityEventDrawer({ date, open, onClose, city }: CityEventDrawerProps) {
   const [events, setEvents] = useState<CityEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
@@ -37,11 +38,11 @@ export function CityEventDrawer({ date, open, onClose }: CityEventDrawerProps) {
   useEffect(() => {
     if (!date) return;
     setLoading(true);
-    fetchDayDetail(date).then((d) => {
-      setEvents(d.cityEvents);
+    fetchCityEvents(date, city).then((d) => {
+      setEvents(d);
       setLoading(false);
     });
-  }, [date]);
+  }, [date, city]);
 
   const formattedDate = date
     ? new Date(date + "T00:00:00").toLocaleDateString("zh-CN", { month: "long", day: "numeric" })

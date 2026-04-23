@@ -67,6 +67,16 @@ export function generateMonthData(year: number, month: number): DayData[] {
       myHotelRate: myRate,
       competitorAvgRate: compRate,
       marketAvgRate: marketRate,
+      competitorPeriodOccupancy: {
+        AM: Math.round(Math.min(100, Math.max(5, compRate + (rand() - 0.5) * 20))),
+        PM: Math.round(Math.min(100, Math.max(5, compRate + (rand() - 0.5) * 20))),
+        EV: Math.round(Math.min(100, Math.max(5, compRate + (rand() - 0.5) * 20))),
+      },
+      marketPeriodOccupancy: {
+        AM: Math.round(Math.min(100, Math.max(5, marketRate + (rand() - 0.5) * 15))),
+        PM: Math.round(Math.min(100, Math.max(5, marketRate + (rand() - 0.5) * 15))),
+        EV: Math.round(Math.min(100, Math.max(5, marketRate + (rand() - 0.5) * 15))),
+      },
       competitorSumBookings: compSumBookings,
       marketSumBookings: marketSumBookings,
     });

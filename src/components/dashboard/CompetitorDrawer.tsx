@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { fetchDayDetail } from "@/api/dashboardApi";
+import { fetchCompetitorDetail } from "@/api/dashboardApi";
 import type { CompetitorDetail } from "@/api/types";
-import { Building2, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Building2, Clock, ChevronDown } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface CompetitorDrawerProps {
   date: string | null;
   open: boolean;
   onClose: () => void;
+  hotelId: number;
 }
+
+const PERIOD_LABEL: Record<string, string> = { AM: "上午", PM: "下午", EV: "晚上" };
 
 function CompetitorContent({ competitors, loading }: { competitors: CompetitorDetail[]; loading: boolean }) {
   if (loading) return <div className="flex items-center justify-center py-12 text-muted-foreground">Loading…</div>;
@@ -26,7 +29,7 @@ function CompetitorContent({ competitors, loading }: { competitors: CompetitorDe
             <div className="flex items-center justify-between rounded-lg border bg-card p-3 hover:bg-accent/50 transition-colors group">
               <div className="text-left">
                 <p className="font-medium text-sm">{c.hotelName}</p>
-                <p className="text-xs text-muted-foreground">{c.activityType}</p>
+                <p className="text-xs text-muted-foreground">{c.activityType || "活动"}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Badge className="font-display">×{c.count}</Badge>
@@ -36,14 +39,15 @@ function CompetitorContent({ competitors, loading }: { competitors: CompetitorDe
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="ml-3 border-l-2 border-border pl-3 py-1 space-y-1">
-              {c.activities.map((act, j) => (
-                <div key={j} className="flex items-start gap-1.5 text-xs text-muted-foreground py-1">
-                  <span className="text-border mt-0.5">{j === c.activities.length - 1 ? "└" : "├"}──</span>
-                  <span className="text-foreground font-medium">{act.name}</span>
-                  <span>·</span>
-                  <span>{act.date}</span>
-                  <span>·</span>
-                  <span>{act.venue}</span>
+              {(c.activities ?? []).length === 0 ? (
+                <p className="text-xs text-muted-foreground py-1">无详细记录</p>
+              ) : (c.activities ?? []).map((act, j) => (
+                <div key={j} className="flex items-center gap-2 text-xs py-1.5">
+                  <span className="text-foreground font-medium">{act.venueName}</span>
+                  <Badge variant="outline" className="text-[10px] h-5 gap-1">
+                    <Clock className="h-3 w-3" />
+                    {PERIOD_LABEL[act.period] ?? act.period}
+                  </Badge>
                 </div>
               ))}
             </div>
@@ -54,19 +58,19 @@ function CompetitorContent({ competitors, loading }: { competitors: CompetitorDe
   );
 }
 
-export function CompetitorDrawer({ date, open, onClose }: CompetitorDrawerProps) {
+export function CompetitorDrawer({ date, open, onClose, hotelId }: CompetitorDrawerProps) {
   const [competitors, setCompetitors] = useState<CompetitorDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    if (!date) return;
+    if (!date || !hotelId) return;
     setLoading(true);
-    fetchDayDetail(date).then((d) => {
-      setCompetitors(d.competitors);
+    fetchCompetitorDetail(date, hotelId).then((d) => {
+      setCompetitors(d);
       setLoading(false);
     });
-  }, [date]);
+  }, [date, hotelId]);
 
   const formattedDate = date
     ? new Date(date + "T00:00:00").toLocaleDateString("zh-CN", { month: "long", day: "numeric" })

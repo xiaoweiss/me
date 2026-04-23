@@ -63,9 +63,9 @@ export default {
           high: "hsl(var(--occ-high))",
         },
         chart: {
-          mine: "hsl(var(--chart-line-mine))",
-          comp: "hsl(var(--chart-line-comp))",
-          market: "hsl(var(--chart-line-market))",
+          mine: "hsl(var(--chart-line-mine) / <alpha-value>)",
+          comp: "hsl(var(--chart-line-comp) / <alpha-value>)",
+          market: "hsl(var(--chart-line-market) / <alpha-value>)",
         },
       },
       fontFamily: {

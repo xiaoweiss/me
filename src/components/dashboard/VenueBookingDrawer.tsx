@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Badge } from "@/components/ui/badge";
-import { fetchDayDetail } from "@/api/dashboardApi";
+import { fetchVenueBookings } from "@/api/dashboardApi";
 import type { VenueBooking } from "@/api/types";
 import { Hotel, Clock } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -11,6 +11,7 @@ interface VenueBookingDrawerProps {
   date: string | null;
   open: boolean;
   onClose: () => void;
+  hotelId: number;
 }
 
 const PERIOD_LABEL: Record<string, string> = { AM: "上午", PM: "下午", EV: "晚上" };
@@ -32,7 +33,12 @@ function BookingContent({ bookings, loading }: { bookings: VenueBooking[]; loadi
               <Clock className="h-3 w-3" />
               {PERIOD_LABEL[b.period] ?? b.period}
             </Badge>
-            <Badge variant="secondary" className="text-[10px] h-5">{b.activityType}</Badge>
+            {b.isBooked && b.activityType && (
+              <Badge variant="secondary" className="text-[10px] h-5">{b.activityType}</Badge>
+            )}
+            <Badge variant={b.isBooked ? "default" : "outline"} className="text-[10px] h-5">
+              {b.isBooked ? "已预订" : "空闲"}
+            </Badge>
           </div>
         </div>
       ))}
@@ -40,19 +46,19 @@ function BookingContent({ bookings, loading }: { bookings: VenueBooking[]; loadi
   );
 }
 
-export function VenueBookingDrawer({ date, open, onClose }: VenueBookingDrawerProps) {
+export function VenueBookingDrawer({ date, open, onClose, hotelId }: VenueBookingDrawerProps) {
   const [bookings, setBookings] = useState<VenueBooking[]>([]);
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    if (!date) return;
+    if (!date || !hotelId) return;
     setLoading(true);
-    fetchDayDetail(date).then((d) => {
-      setBookings(d.venueBookings);
+    fetchVenueBookings(date, hotelId).then((d) => {
+      setBookings(d);
       setLoading(false);
     });
-  }, [date]);
+  }, [date, hotelId]);
 
   const formattedDate = date
     ? new Date(date + "T00:00:00").toLocaleDateString("zh-CN", { month: "long", day: "numeric" })

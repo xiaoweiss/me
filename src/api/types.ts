@@ -1,4 +1,4 @@
-export type VenueType = "All" | "Ballroom" | "Conference Room";
+export type VenueType = string;
 export type TimePeriod = "All" | "AM" | "PM" | "EV";
 
 export interface ThresholdBand {
@@ -24,6 +24,8 @@ export interface DayData {
   myHotelRate: number;
   competitorAvgRate: number;
   marketAvgRate: number;
+  competitorPeriodOccupancy: PeriodValues;
+  marketPeriodOccupancy: PeriodValues;
   competitorSumBookings: number;
   marketSumBookings: number;
 }
@@ -35,9 +37,12 @@ export interface CityEvent {
 }
 
 export interface CompetitorActivity {
-  name: string;
+  venueName: string;
+  period: string;
   date: string;
-  venue: string;
+  eventName: string;     // 活动名称（来自 Hotel Event 表）
+  eventType: string;     // 活动类型
+  bookingStatus: string; // 预订状态（已出租 / ...）
 }
 
 export interface CompetitorDetail {
@@ -51,13 +56,7 @@ export interface VenueBooking {
   venueName: string;
   period: "AM" | "PM" | "EV";
   activityType: string;
-}
-
-export interface DayDetail {
-  date: string;
-  cityEvents: CityEvent[];
-  competitors: CompetitorDetail[];
-  venueBookings: VenueBooking[];
+  isBooked: boolean;
 }
 
 export interface Filters {
@@ -65,4 +64,36 @@ export interface Filters {
   timePeriod: TimePeriod;
   month: number; // 0-11
   year: number;
+}
+
+// ---- Backend API response shapes ----
+
+export interface ApiPeriodData {
+  m: number;
+  a: number;
+  e: number;
+}
+
+export interface ApiDailyOccupancy {
+  date: string;
+  hotel: ApiPeriodData;
+  competitorAvg: ApiPeriodData;
+  marketAvg: ApiPeriodData;
+  cityEventCount: number;
+}
+
+export interface ApiDailyActivity {
+  date: string;
+  hotel: ApiPeriodData;
+  competitorTotal: ApiPeriodData;
+  marketTotal: ApiPeriodData;
+  cityEventCount: number;
+}
+
+export interface ApiThresholdItem {
+  metricType: string;
+  level: string;
+  minValue: number;
+  maxValue: number;
+  color: string;
 }

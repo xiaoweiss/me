@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { fetchDayDetail } from "@/api/dashboardApi";
+import { fetchCityEvents, fetchCompetitorDetail } from "@/api/dashboardApi";
 import { getThresholdColor } from "./DayCell";
-import type { DayData, DayDetail, ThresholdBand } from "@/api/types";
-import { CalendarDays, MapPin, Building2, ChevronDown } from "lucide-react";
+import type { DayData, CityEvent, CompetitorDetail, ThresholdBand } from "@/api/types";
+import { CalendarDays, MapPin, Building2 } from "lucide-react";
 
 interface MobileDayDrawerProps {
   day: DayData | null;
@@ -14,6 +13,8 @@ interface MobileDayDrawerProps {
   onClose: () => void;
   mode: "occupancy" | "bookings";
   thresholds: ThresholdBand[];
+  hotelId: number;
+  city: string;
 }
 
 const PERIODS: { key: "AM" | "PM"; label: string }[] = [
@@ -21,18 +22,23 @@ const PERIODS: { key: "AM" | "PM"; label: string }[] = [
   { key: "PM", label: "下午" },
 ];
 
-export function MobileDayDrawer({ day, open, onClose, mode, thresholds }: MobileDayDrawerProps) {
-  const [detail, setDetail] = useState<DayDetail | null>(null);
+export function MobileDayDrawer({ day, open, onClose, mode, thresholds, hotelId, city }: MobileDayDrawerProps) {
+  const [cityEvents, setCityEvents] = useState<CityEvent[]>([]);
+  const [competitors, setCompetitors] = useState<CompetitorDetail[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!day) return;
     setLoading(true);
-    fetchDayDetail(day.date).then((d) => {
-      setDetail(d);
+    Promise.all([
+      fetchCityEvents(day.date, city),
+      hotelId ? fetchCompetitorDetail(day.date, hotelId) : Promise.resolve([]),
+    ]).then(([events, comps]) => {
+      setCityEvents(events);
+      setCompetitors(comps);
       setLoading(false);
     });
-  }, [day?.date]);
+  }, [day?.date, hotelId, city]);
 
   if (!day) return null;
 
@@ -59,7 +65,6 @@ export function MobileDayDrawer({ day, open, onClose, mode, thresholds }: Mobile
         </DrawerHeader>
 
         <div className="overflow-y-auto px-4 pb-6 space-y-4">
-          {/* M / A / E breakdown */}
           <section className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">时段明细</h3>
             <div className="space-y-1.5">
@@ -90,8 +95,7 @@ export function MobileDayDrawer({ day, open, onClose, mode, thresholds }: Mobile
             </div>
           </section>
 
-          {/* City Events */}
-          {detail && detail.cityEvents.length > 0 && (
+          {cityEvents.length > 0 && (
             <>
               <Separator />
               <section>
@@ -100,7 +104,7 @@ export function MobileDayDrawer({ day, open, onClose, mode, thresholds }: Mobile
                   城市活动
                 </h3>
                 <div className="space-y-1.5">
-                  {detail.cityEvents.map((e, i) => (
+                  {cityEvents.map((e, i) => (
                     <div key={i} className="rounded-lg border bg-card p-2.5">
                       <p className="text-sm font-medium">{e.venue}：{e.name}</p>
                       <Badge variant="outline" className="mt-1 text-[10px] h-5">{e.type}</Badge>
@@ -111,8 +115,7 @@ export function MobileDayDrawer({ day, open, onClose, mode, thresholds }: Mobile
             </>
           )}
 
-          {/* Competitor details */}
-          {detail && detail.competitors.length > 0 && (
+          {competitors.length > 0 && (
             <>
               <Separator />
               <section>
@@ -121,33 +124,14 @@ export function MobileDayDrawer({ day, open, onClose, mode, thresholds }: Mobile
                   竞对酒店群明细
                 </h3>
                 <div className="space-y-1.5">
-                  {detail.competitors.map((c, i) => (
-                    <Collapsible key={i}>
-                      <CollapsibleTrigger className="w-full">
-                        <div className="flex items-center justify-between rounded-lg border bg-card p-2.5 hover:bg-accent/50 transition-colors group">
-                          <div className="text-left">
-                            <p className="font-medium text-sm">{c.hotelName}</p>
-                            <p className="text-xs text-muted-foreground">{c.activityType}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge className="font-display">×{c.count}</Badge>
-                            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-                          </div>
-                        </div>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <div className="ml-3 border-l-2 border-border pl-3 py-1 space-y-1">
-                          {c.activities.map((act, j) => (
-                            <div key={j} className="flex items-start gap-1.5 text-xs text-muted-foreground py-0.5">
-                              <span className="text-border mt-0.5">{j === c.activities.length - 1 ? "└" : "├"}──</span>
-                              <span className="text-foreground font-medium">{act.name}</span>
-                              <span>·</span>
-                              <span>{act.venue}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
+                  {competitors.map((c, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-lg border bg-card p-2.5">
+                      <div className="text-left">
+                        <p className="font-medium text-sm">{c.hotelName}</p>
+                        <p className="text-xs text-muted-foreground">{c.activityType}</p>
+                      </div>
+                      <Badge className="font-display">×{c.count}</Badge>
+                    </div>
                   ))}
                 </div>
               </section>
