@@ -842,9 +842,50 @@ function TemplatesTab() {
     }
   }
 
+  async function testConnectivity() {
+    const email = prompt("发送一封不带模板的连通性测试邮件到：", "");
+    if (email === null) return;
+    const target = email.trim();
+    if (!target) {
+      toast.error("请输入收件邮箱");
+      return;
+    }
+    try {
+      const resp = await request<{ message: string }>("/api/email/send-to-user", {
+        method: "POST",
+        body: JSON.stringify({ email: target }),
+      });
+      toast.success(resp.message || "已发送");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "发送失败");
+    }
+  }
+
+  async function testTemplate(t: MailTemplate) {
+    const email = prompt(`使用模板 [${t.name}] 发送测试邮件到：`, "");
+    if (email === null) return;
+    const target = email.trim();
+    if (!target) {
+      toast.error("请输入收件邮箱");
+      return;
+    }
+    try {
+      const resp = await request<{ message: string }>("/api/email/send-to-user", {
+        method: "POST",
+        body: JSON.stringify({ email: target, templateName: t.name }),
+      });
+      toast.success(resp.message || "已发送");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "发送失败");
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center">
+        <Button size="sm" variant="outline" className="gap-1" onClick={testConnectivity}>
+          <Send className="h-3.5 w-3.5" /> 测试 SMTP 连通性
+        </Button>
         <Button size="sm" className="gap-1" onClick={openCreate}>
           <Plus className="h-3.5 w-3.5" /> 新建模板
         </Button>
@@ -873,6 +914,9 @@ function TemplatesTab() {
                   <TableCell className="text-xs text-muted-foreground">{t.description || "-"}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => testTemplate(t)} title="使用此模板发送测试邮件">
+                        <Send className="h-3 w-3" /> 测试
+                      </Button>
                       <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openEdit(t)}>编辑</Button>
                       <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => deleteTpl(t.id)}>
                         <Trash2 className="h-3 w-3" />
