@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, ChevronDown, ChevronUp, RotateCcw, Eye, Save, Send } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, RotateCcw, Eye, Save, Send, FileText } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
 // ---- Types ----
@@ -771,6 +772,81 @@ const TEMPLATE_VARS = [
   { key: "{{.MarketRate}}", desc: "商圈均值" },
 ];
 
+const BUILTIN_TEMPLATES: Array<{ name: string; description: string; subject: string; body: string }> = [
+  {
+    name: "daily_report",
+    description: "会议室运营日报（含 KPI 卡片 + 市场对标）",
+    subject: "【{{.HotelName}}】{{.Date}} 会议室运营日报",
+    body: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f7fa;padding:24px 0;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1f2937;">
+  <tr><td align="center">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;">
+      <tr>
+        <td style="padding:28px 32px;background:#1e3a8a;color:#ffffff;">
+          <div style="font-size:13px;letter-spacing:0.5px;opacity:0.85;">STI Report · 会议室运营日报</div>
+          <div style="font-size:22px;font-weight:600;margin-top:4px;">{{.HotelName}}</div>
+          <div style="font-size:13px;margin-top:8px;opacity:0.85;">报告日期：{{.Date}}</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:28px 32px 8px 32px;">
+          <div style="font-size:13px;color:#6b7280;margin-bottom:12px;">综合表现</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>
+              <td width="33%" align="center" style="padding:18px 8px;background:#eff6ff;border-radius:8px;">
+                <div style="font-size:12px;color:#6b7280;">综合出租率</div>
+                <div style="font-size:26px;font-weight:700;color:#1e40af;margin-top:4px;">{{.OccupancyRate}}</div>
+              </td>
+              <td width="2%">&nbsp;</td>
+              <td width="32%" align="center" style="padding:18px 8px;background:#fef9c3;border-radius:8px;">
+                <div style="font-size:12px;color:#6b7280;">上午</div>
+                <div style="font-size:22px;font-weight:600;color:#b45309;margin-top:4px;">{{.AM}}</div>
+              </td>
+              <td width="2%">&nbsp;</td>
+              <td width="31%" align="center" style="padding:18px 8px;background:#dcfce7;border-radius:8px;">
+                <div style="font-size:12px;color:#6b7280;">下午</div>
+                <div style="font-size:22px;font-weight:600;color:#047857;margin-top:4px;">{{.PM}}</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:24px 32px 8px 32px;">
+          <div style="font-size:13px;color:#6b7280;margin-bottom:12px;">市场对标</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #e5e7eb;border-radius:8px;">
+            <tr>
+              <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">本酒店综合出租率</td>
+              <td align="right" style="padding:14px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;font-weight:600;color:#1e40af;">{{.OccupancyRate}}</td>
+            </tr>
+            <tr>
+              <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">竞对均值</td>
+              <td align="right" style="padding:14px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#374151;">{{.CompRate}}</td>
+            </tr>
+            <tr>
+              <td style="padding:14px 16px;font-size:13px;color:#374151;">商圈均值</td>
+              <td align="right" style="padding:14px 16px;font-size:14px;color:#374151;">{{.MarketRate}}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:20px 32px;font-size:13px;line-height:1.7;color:#4b5563;">
+          <p style="margin:0;">{{.UserName}} 您好，</p>
+          <p style="margin:10px 0 0 0;">以上为 <strong>{{.HotelName}}</strong> 在 <strong>{{.Date}}</strong> 的会议室运营数据。综合出租率为 <strong style="color:#1e40af;">{{.OccupancyRate}}</strong>，请关注与竞对／商圈均值的差距，及时调整销售策略。</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:18px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;text-align:center;">
+          本邮件由会议室运营平台自动发送，请勿直接回复
+        </td>
+      </tr>
+    </table>
+    <div style="font-size:11px;color:#9ca3af;margin-top:12px;">© STI Report · {{.Date}}</div>
+  </td></tr>
+</table>`,
+  },
+];
+
 function TemplatesTab() {
   const [templates, setTemplates] = useState<MailTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -800,6 +876,15 @@ function TemplatesTab() {
     setFormSubject("");
     setFormBody("");
     setFormDesc("");
+    setDialogOpen(true);
+  }
+
+  function openFromBuiltin(t: typeof BUILTIN_TEMPLATES[number]) {
+    setEditId(null);
+    setFormName(t.name);
+    setFormDesc(t.description);
+    setFormSubject(t.subject);
+    setFormBody(t.body);
     setDialogOpen(true);
   }
 
@@ -886,9 +971,25 @@ function TemplatesTab() {
         <Button size="sm" variant="outline" className="gap-1" onClick={testConnectivity}>
           <Send className="h-3.5 w-3.5" /> 测试 SMTP 连通性
         </Button>
-        <Button size="sm" className="gap-1" onClick={openCreate}>
-          <Plus className="h-3.5 w-3.5" /> 新建模板
-        </Button>
+        <div className="flex gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1">
+                <FileText className="h-3.5 w-3.5" /> 从示例创建 <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {BUILTIN_TEMPLATES.map((t) => (
+                <DropdownMenuItem key={t.name} onClick={() => openFromBuiltin(t)}>
+                  {t.description}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button size="sm" className="gap-1" onClick={openCreate}>
+            <Plus className="h-3.5 w-3.5" /> 新建模板
+          </Button>
+        </div>
       </div>
 
       <Card>
