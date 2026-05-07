@@ -10,6 +10,7 @@ import type {
   ApiDailyActivity,
   ApiThresholdItem,
   ApiPeriodData,
+  MonthSummary,
 } from "./types";
 
 function avg(p: ApiPeriodData): number {
@@ -33,16 +34,20 @@ async function fetchForHotel(hotelId: number, filters: Filters) {
     venueType: filters.venueType === "All" ? "" : filters.venueType,
   });
   const [occResp, actResp] = await Promise.all([
-    request<{ list: ApiDailyOccupancy[] }>(`/api/dashboard/occupancy?${q}`),
+    request<{ list: ApiDailyOccupancy[]; summary?: MonthSummary }>(`/api/dashboard/occupancy?${q}`),
     request<{ list: ApiDailyActivity[] }>(`/api/dashboard/activity?${q}`),
   ]);
-  return { occ: occResp.list ?? [], act: actResp.list ?? [] };
+  return {
+    occ: occResp.list ?? [],
+    act: actResp.list ?? [],
+    summary: occResp.summary ?? { hotelRate: 0, competitorRate: 0, marketRate: 0 },
+  };
 }
 
 export async function fetchMonthData(
   hotelIdOrIds: number | number[],
   filters: Filters,
-): Promise<DayData[]> {
+): Promise<{ days: DayData[]; summary: MonthSummary }> {
   const ids = Array.isArray(hotelIdOrIds) ? hotelIdOrIds : [hotelIdOrIds];
 
   const results = await Promise.all(ids.map((id) => fetchForHotel(id, filters)));
@@ -119,10 +124,21 @@ export async function fetchMonthData(
       marketPeriodOccupancy: toPeriodValues(mktOcc),
       competitorSumBookings: sum(compAct),
       marketSumBookings: sum(mktAct),
+      competitorPeriodBookings: toPeriodValues(compAct),
+      marketPeriodBookings: toPeriodValues(mktAct),
     });
   }
 
-  return days;
+  // 多酒店时取各酒店 summary 的算术平均（最常用场景是单酒店，单酒店等于直接返回）
+  const summary: MonthSummary = results.length === 0
+    ? { hotelRate: 0, competitorRate: 0, marketRate: 0 }
+    : {
+        hotelRate:      results.reduce((s, r) => s + r.summary.hotelRate, 0)      / results.length,
+        competitorRate: results.reduce((s, r) => s + r.summary.competitorRate, 0) / results.length,
+        marketRate:     results.reduce((s, r) => s + r.summary.marketRate, 0)     / results.length,
+      };
+
+  return { days, summary };
 }
 
 export async function fetchCityEvents(date: string, city: string): Promise<CityEvent[]> {

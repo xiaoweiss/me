@@ -10,6 +10,7 @@ export interface LoginResponse {
 export interface UserHotel {
   id: number;
   name: string;
+  city: string;
 }
 
 export interface UserInfo {

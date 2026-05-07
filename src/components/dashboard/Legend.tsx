@@ -1,25 +1,30 @@
-import type { DayData, ThresholdBand } from "@/api/types";
+import type { DayData, ThresholdBand, MonthSummary } from "@/api/types";
 
 interface LegendProps {
   days: DayData[];
   thresholds: ThresholdBand[];
   mode: "occupancy" | "bookings";
+  summary?: MonthSummary;
 }
 
-export function Legend({ days, thresholds, mode }: LegendProps) {
+export function Legend({ days, thresholds, mode, summary }: LegendProps) {
   if (days.length === 0) return null;
 
-  const myAvg = Math.round(days.reduce((s, d) => s + d.myHotelRate, 0) / days.length);
+  // 出租率：用后端返回的 summary（按 venue 加权 ∑booked/∑total，仅统计已录入日期）
+  // 活动预订：仍按天累加（数量类指标）
+  const myAvg = mode === "occupancy"
+    ? Math.round(summary?.hotelRate ?? 0)
+    : Math.round(days.reduce((s, d) => s + d.newBookingCount, 0));
 
   const compLabel = mode === "occupancy" ? "竞对均值" : "竞对总值";
   const marketLabel = mode === "occupancy" ? "商圈均值" : "商圈总值";
 
   const compValue = mode === "occupancy"
-    ? Math.round(days.reduce((s, d) => s + d.competitorAvgRate, 0) / days.length)
+    ? Math.round(summary?.competitorRate ?? 0)
     : days.reduce((s, d) => s + d.competitorSumBookings, 0);
 
   const marketValue = mode === "occupancy"
-    ? Math.round(days.reduce((s, d) => s + d.marketAvgRate, 0) / days.length)
+    ? Math.round(summary?.marketRate ?? 0)
     : days.reduce((s, d) => s + d.marketSumBookings, 0);
 
   const suffix = mode === "occupancy" ? "%" : "";

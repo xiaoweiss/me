@@ -177,19 +177,28 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-px">
-            <button
-              type="button"
-              title="查看竞对活动明细"
-              className="w-full flex items-center justify-center gap-0.5 rounded px-0.5 py-1.5 hover:bg-chart-comp/10 active:bg-chart-comp/20 transition-colors cursor-pointer"
-              onClick={(e) => { e.stopPropagation(); onCompetitorClick?.(day.date); }}
-            >
-              <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-chart-comp/20 text-chart-comp text-[8px] font-bold leading-none">C</span>
-              <CompareValue myVal={day.newBookingCount} otherVal={day.competitorSumBookings} label={`${day.competitorSumBookings}`} prefix="" />
-            </button>
-            <div className="w-full flex items-center justify-center gap-0.5 rounded px-0.5 py-1.5">
-              <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-chart-market/20 text-chart-market text-[8px] font-bold leading-none">M</span>
-              <CompareValue myVal={day.newBookingCount} otherVal={day.marketSumBookings} label={`${day.marketSumBookings}`} prefix="" />
-            </div>
+            {PERIODS.map((p) => {
+              const myVal = day.periodBookings[p];
+              const compVal = day.competitorPeriodBookings[p];
+              const mktVal = day.marketPeriodBookings[p];
+              return (
+                <div key={p} className="flex flex-col gap-0.5">
+                  <button
+                    type="button"
+                    title="查看竞对活动明细"
+                    className="w-full flex items-center justify-center gap-0.5 rounded px-0.5 py-1 hover:bg-chart-comp/10 active:bg-chart-comp/20 transition-colors cursor-pointer"
+                    onClick={(e) => { e.stopPropagation(); onCompetitorClick?.(day.date); }}
+                  >
+                    <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-chart-comp/20 text-chart-comp text-[8px] font-bold leading-none">C</span>
+                    <CompareValue myVal={myVal} otherVal={compVal} label={`${compVal}`} prefix="" />
+                  </button>
+                  <div className="w-full flex items-center justify-center gap-0.5 rounded px-0.5 py-1">
+                    <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-chart-market/20 text-chart-market text-[8px] font-bold leading-none">M</span>
+                    <CompareValue myVal={myVal} otherVal={mktVal} label={`${mktVal}`} prefix="" />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

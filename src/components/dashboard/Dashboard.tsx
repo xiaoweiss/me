@@ -7,10 +7,11 @@ import { FilterBar } from "./FilterBar";
 import { DayCell } from "./DayCell";
 import { CityEventDrawer } from "./CityEventDrawer";
 import { CompetitorDrawer } from "./CompetitorDrawer";
+import { VenueBookingDrawer } from "./VenueBookingDrawer";
 import { Legend } from "./Legend";
 import { fetchMonthData, fetchThresholds } from "@/api/dashboardApi";
 import { useAuth } from "@/contexts/AuthContext";
-import type { DayData, Filters, ThresholdBand } from "@/api/types";
+import type { DayData, Filters, ThresholdBand, MonthSummary } from "@/api/types";
 import { BarChart3, CalendarRange } from "lucide-react";
 
 const DAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
@@ -39,7 +40,8 @@ export function Dashboard() {
   const hotelIds = auth.status === "authenticated" ? auth.user.hotelIds ?? [] : [];
   const [selectedHotelId, setSelectedHotelId] = useState<number>(0);
   const hotelId = selectedHotelId || hotelIds[0] || 0;
-  const city = "苏州";
+  // 城市活动按当前选中酒店的所在城市过滤
+  const city = hotels.find((h) => h.id === hotelId)?.city || "";
 
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth());
@@ -47,11 +49,14 @@ export function Dashboard() {
   const [venueType, setVenueType] = useState("All");
   const [mode, setMode] = useState<"occupancy" | "bookings">("occupancy");
   const [days, setDays] = useState<DayData[]>([]);
+  const [summary, setSummary] = useState<MonthSummary>({ hotelRate: 0, competitorRate: 0, marketRate: 0 });
   const [thresholds, setThresholds] = useState<ThresholdBand[]>([]);
   const [cityEventDate, setCityEventDate] = useState<string | null>(null);
   const [cityEventOpen, setCityEventOpen] = useState(false);
   const [compDate, setCompDate] = useState<string | null>(null);
   const [compOpen, setCompOpen] = useState(false);
+  const [venueBookingDate, setVenueBookingDate] = useState<string | null>(null);
+  const [venueBookingOpen, setVenueBookingOpen] = useState(false);
 
   useEffect(() => {
     if (hotelId) fetchThresholds(hotelId).then(setThresholds);
@@ -62,16 +67,23 @@ export function Dashboard() {
     const filters: Filters = { venueType, timePeriod: "All", month, year };
     const queryIds = selectedHotelId === 0 ? hotelIds : selectedHotelId;
     const data = await fetchMonthData(queryIds, filters);
-    setDays(data);
+    setDays(data.days);
+    setSummary(data.summary);
   }, [selectedHotelId, hotelIds, venueType, month, year]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // 点击格子背景：按需求仅在「当天完全无数据」时 toast
-  // 有数据时什么都不做（用户应点击 🚩 或 C 徽标进入具体 drawer）
+  // 点击格子背景：
+  // - 活动预订模式：打开当天活动明细 drawer
+  // - 出租率模式：仅在「当天完全无数据」时 toast，有数据时由 🚩/C 徽标处理
   const handleDayClick = (date: string) => {
+    if (mode === "bookings") {
+      setVenueBookingDate(date);
+      setVenueBookingOpen(true);
+      return;
+    }
     const d = days.find((x) => x.date === date);
     if (!d || !dayHasData(d)) {
       toast.info(`${formatDateCN(date)}暂无数据`);
@@ -89,9 +101,34 @@ export function Dashboard() {
   };
 
   const firstDayOfWeek = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const zeroPeriod: DayData["periodOccupancy"] = { AM: 0, PM: 0, EV: 0 };
+  const dayMap = new Map(days.map((d) => [d.date, d]));
+  const allDays: DayData[] = Array.from({ length: daysInMonth }, (_, i) => {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+    return (
+      dayMap.get(dateStr) ?? {
+        date: dateStr,
+        occupancyRate: 0,
+        periodOccupancy: zeroPeriod,
+        cityEventCount: 0,
+        newBookingCount: 0,
+        periodBookings: zeroPeriod,
+        myHotelRate: 0,
+        competitorAvgRate: 0,
+        marketAvgRate: 0,
+        competitorPeriodOccupancy: zeroPeriod,
+        marketPeriodOccupancy: zeroPeriod,
+        competitorSumBookings: 0,
+        marketSumBookings: 0,
+        competitorPeriodBookings: zeroPeriod,
+        marketPeriodBookings: zeroPeriod,
+      }
+    );
+  });
   const gridCells: (DayData | null)[] = [
     ...Array(firstDayOfWeek).fill(null),
-    ...days,
+    ...allDays,
   ];
 
   return (
@@ -137,7 +174,7 @@ export function Dashboard() {
             <CardTitle className="text-sm sm:text-base font-display">
               {mode === "occupancy" ? "月度出租率" : "活动预订"}
             </CardTitle>
-            <Legend days={days} thresholds={thresholds} mode={mode} />
+            <Legend days={days} thresholds={thresholds} mode={mode} summary={summary} />
           </CardHeader>
           <CardContent className="px-2 pb-3 sm:px-6 sm:pb-6">
             {/* Day headers */}
@@ -200,6 +237,7 @@ export function Dashboard() {
 
       <CityEventDrawer date={cityEventDate} open={cityEventOpen} onClose={() => setCityEventOpen(false)} city={city} />
       <CompetitorDrawer date={compDate} open={compOpen} onClose={() => setCompOpen(false)} hotelId={hotelId} />
+      <VenueBookingDrawer date={venueBookingDate} open={venueBookingOpen} onClose={() => setVenueBookingOpen(false)} hotelId={hotelId} />
     </div>
   );
 }

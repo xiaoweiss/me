@@ -14,6 +14,13 @@ export interface PeriodValues {
   EV: number;
 }
 
+// MonthSummary 月度汇总（按 venue 加权 ∑booked/∑total）
+export interface MonthSummary {
+  hotelRate: number;      // 本酒店出租率 0-100
+  competitorRate: number; // 竞对群出租率 0-100
+  marketRate: number;     // 商圈出租率 0-100
+}
+
 export interface DayData {
   date: string; // YYYY-MM-DD
   occupancyRate: number; // overall 0-100
@@ -28,6 +35,8 @@ export interface DayData {
   marketPeriodOccupancy: PeriodValues;
   competitorSumBookings: number;
   marketSumBookings: number;
+  competitorPeriodBookings: PeriodValues;
+  marketPeriodBookings: PeriodValues;
 }
 
 export interface CityEvent {
