@@ -36,19 +36,19 @@ export function Legend({ days, thresholds, mode, summary }: LegendProps) {
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-4">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:gap-4">
       {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-2">
-          <span className={`h-2.5 w-2.5 rounded-full ${item.colorClass}`} />
-          <span className="text-xs text-muted-foreground">{item.label}</span>
-          <span className="text-xs font-semibold text-foreground">{item.value}{suffix}</span>
+        <div key={item.label} className="flex items-center gap-1 sm:gap-2">
+          <span className={`h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full ${item.colorClass}`} />
+          <span className="text-[11px] sm:text-xs text-muted-foreground">{item.label}</span>
+          <span className="text-[11px] sm:text-xs font-semibold text-foreground">{item.value}{suffix}</span>
         </div>
       ))}
-      <div className="ml-auto flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 sm:ml-auto">
         {thresholds.map((t) => (
           <div key={t.label} className="flex items-center gap-1">
             <span
-              className="h-2.5 w-2.5 rounded-sm"
+              className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-sm"
               style={{ backgroundColor: `hsl(${t.color} / 0.4)` }}
             />
             <span className="text-[10px] text-muted-foreground">{t.label}</span>
