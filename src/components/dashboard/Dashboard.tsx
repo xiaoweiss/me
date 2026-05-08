@@ -8,6 +8,7 @@ import { DayCell } from "./DayCell";
 import { CityEventDrawer } from "./CityEventDrawer";
 import { CompetitorDrawer } from "./CompetitorDrawer";
 import { VenueBookingDrawer } from "./VenueBookingDrawer";
+import { DayDetailDrawer } from "./DayDetailDrawer";
 import { Legend } from "./Legend";
 import { fetchMonthData, fetchThresholds } from "@/api/dashboardApi";
 import { useAuth } from "@/contexts/AuthContext";
@@ -57,6 +58,8 @@ export function Dashboard() {
   const [compOpen, setCompOpen] = useState(false);
   const [venueBookingDate, setVenueBookingDate] = useState<string | null>(null);
   const [venueBookingOpen, setVenueBookingOpen] = useState(false);
+  const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
+  const [dayDetailOpen, setDayDetailOpen] = useState(false);
 
   useEffect(() => {
     if (hotelId) fetchThresholds(hotelId).then(setThresholds);
@@ -77,7 +80,7 @@ export function Dashboard() {
 
   // 点击格子背景：
   // - 活动预订模式：打开当天活动明细 drawer
-  // - 出租率模式：仅在「当天完全无数据」时 toast，有数据时由 🚩/C 徽标处理
+  // - 出租率模式：有数据打开「日详情抽屉」，无数据 toast 提示
   const handleDayClick = (date: string) => {
     if (mode === "bookings") {
       setVenueBookingDate(date);
@@ -87,7 +90,10 @@ export function Dashboard() {
     const d = days.find((x) => x.date === date);
     if (!d || !dayHasData(d)) {
       toast.info(`${formatDateCN(date)}暂无数据`);
+      return;
     }
+    setDayDetailDate(date);
+    setDayDetailOpen(true);
   };
 
   const handleCityEventClick = (date: string) => {
@@ -238,6 +244,16 @@ export function Dashboard() {
       <CityEventDrawer date={cityEventDate} open={cityEventOpen} onClose={() => setCityEventOpen(false)} city={city} />
       <CompetitorDrawer date={compDate} open={compOpen} onClose={() => setCompOpen(false)} hotelId={hotelId} />
       <VenueBookingDrawer date={venueBookingDate} open={venueBookingOpen} onClose={() => setVenueBookingOpen(false)} hotelId={hotelId} />
+      <DayDetailDrawer
+        date={dayDetailDate}
+        day={dayDetailDate ? days.find((d) => d.date === dayDetailDate) ?? null : null}
+        open={dayDetailOpen}
+        onClose={() => setDayDetailOpen(false)}
+        thresholds={thresholds}
+        mode={mode}
+        hotelId={hotelId}
+        city={city}
+      />
     </div>
   );
 }
