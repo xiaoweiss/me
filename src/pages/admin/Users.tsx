@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, Plus, Mail, Phone } from "lucide-react";
+import { Building2, Plus, Mail, Phone, Star } from "lucide-react";
 import { toast } from "sonner";
 
 interface AdminUser {
@@ -20,6 +20,7 @@ interface AdminUser {
   status: string;
   hotelIds: number[];
   roleId: number;
+  primaryHotelId: number;
 }
 
 interface Hotel {
@@ -67,6 +68,14 @@ export default function AdminUsers() {
   const [editPhoneUserId, setEditPhoneUserId] = useState<number | null>(null);
   const [editPhoneValue, setEditPhoneValue] = useState("");
   const [savingPhone, setSavingPhone] = useState(false);
+
+  const [primaryDialogOpen, setPrimaryDialogOpen] = useState(false);
+  const [editPrimaryUserId, setEditPrimaryUserId] = useState<number | null>(null);
+  const [editPrimaryValue, setEditPrimaryValue] = useState("0");
+  const [editPrimaryAvailable, setEditPrimaryAvailable] = useState<number[]>([]);
+  const [savingPrimary, setSavingPrimary] = useState(false);
+
+  const [newPrimaryHotelId, setNewPrimaryHotelId] = useState("0");
 
   async function load() {
     setLoading(true);
@@ -177,16 +186,48 @@ export default function AdminUsers() {
     }
   }
 
+  function openPrimaryDialog(user: AdminUser) {
+    setEditPrimaryUserId(user.id);
+    setEditPrimaryValue(String(user.primaryHotelId || 0));
+    setEditPrimaryAvailable(user.hotelIds ?? []);
+    setPrimaryDialogOpen(true);
+  }
+
+  async function savePrimary() {
+    if (editPrimaryUserId === null) return;
+    setSavingPrimary(true);
+    try {
+      await request(`/api/admin/users/${editPrimaryUserId}/primary-hotel`, {
+        method: "PUT",
+        body: JSON.stringify({ primaryHotelId: Number(editPrimaryValue) }),
+      });
+      toast.success("所属酒店已更新");
+      setPrimaryDialogOpen(false);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "更新失败");
+    } finally {
+      setSavingPrimary(false);
+    }
+  }
+
   async function createAdmin() {
     setCreating(true);
     try {
       await request("/api/admin/users", {
         method: "POST",
-        body: JSON.stringify({ username: newUsername, password: newPassword, email: newEmail, phone: newPhone, roleId: Number(newRoleId) }),
+        body: JSON.stringify({
+          username: newUsername,
+          password: newPassword,
+          email: newEmail,
+          phone: newPhone,
+          roleId: Number(newRoleId),
+          primaryHotelId: Number(newPrimaryHotelId),
+        }),
       });
       toast.success("管理员账号已创建");
       setCreateOpen(false);
-      setNewUsername(""); setNewPassword(""); setNewEmail(""); setNewPhone(""); setNewRoleId("0");
+      setNewUsername(""); setNewPassword(""); setNewEmail(""); setNewPhone(""); setNewRoleId("0"); setNewPrimaryHotelId("0");
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "创建失败");
@@ -221,14 +262,15 @@ export default function AdminUsers() {
                 <TableHead>状态</TableHead>
                 <TableHead>角色</TableHead>
                 <TableHead>关联酒店</TableHead>
+                <TableHead>所属酒店</TableHead>
                 <TableHead>操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">加载中...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">加载中...</TableCell></TableRow>
               ) : users.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">暂无用户</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">暂无用户</TableCell></TableRow>
               ) : users.map((u) => {
                 const s = STATUS_MAP[u.status] ?? { label: u.status, variant: "secondary" as const };
                 return (
@@ -280,6 +322,19 @@ export default function AdminUsers() {
                       </Button>
                     </TableCell>
                     <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1 font-normal"
+                        onClick={() => openPrimaryDialog(u)}
+                      >
+                        <Star className="h-3 w-3" />
+                        <span className={u.primaryHotelId ? "" : "text-muted-foreground italic"}>
+                          {u.primaryHotelId ? hotelName(u.primaryHotelId) : "未设置"}
+                        </span>
+                      </Button>
+                    </TableCell>
+                    <TableCell>
                       <Select value={u.status} onValueChange={(v) => updateStatus(u.id, v)}>
                         <SelectTrigger className="h-8 w-24 text-xs">
                           <SelectValue />
@@ -322,6 +377,40 @@ export default function AdminUsers() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setHotelDialogOpen(false)}>取消</Button>
             <Button onClick={saveHotels} disabled={saving}>{saving ? "保存中..." : "保存"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={primaryDialogOpen} onOpenChange={setPrimaryDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              编辑所属酒店 — {users.find((u) => u.id === editPrimaryUserId)?.name ?? ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1">
+            <Label>所属酒店</Label>
+            <Select value={editPrimaryValue} onValueChange={setEditPrimaryValue}>
+              <SelectTrigger><SelectValue placeholder="请选择" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">未设置（清除）</SelectItem>
+                {hotels
+                  .filter((h) => editPrimaryAvailable.length === 0 || editPrimaryAvailable.includes(h.id))
+                  .map((h) => (
+                    <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground pt-1">
+              "所属酒店"决定该用户收到的日报内容（HotelName / 出租率 / 竞对群 / 商圈对标）。
+              选项里只列出该用户已关联的酒店；如果一家都没关联，请先去「关联酒店」里勾选。
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrimaryDialogOpen(false)}>取消</Button>
+            <Button onClick={savePrimary} disabled={savingPrimary}>
+              {savingPrimary ? "保存中..." : "保存"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -420,6 +509,16 @@ export default function AdminUsers() {
                 <SelectContent>
                   <SelectItem value="0">不分配</SelectItem>
                   {roles.map((r) => <SelectItem key={r.id} value={String(r.id)}>{r.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>所属酒店（可选）</Label>
+              <Select value={newPrimaryHotelId} onValueChange={setNewPrimaryHotelId}>
+                <SelectTrigger><SelectValue placeholder="选择" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">不设置</SelectItem>
+                  {hotels.map((h) => <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
