@@ -51,33 +51,54 @@ interface NotificationSetting {
 // Cron helpers
 // ==========================================================
 
-type FreqType = "daily" | "weekly" | "monthly" | "interval" | "custom";
+type FreqType = "daily" | "weekly" | "monthly" | "interval" | "intervalSec" | "custom";
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
+// 后端 cron 已升级到 6 字段（秒 分 时 日 月 周），同时兼容老的 5 字段（自动补秒为 0）。
+// 解析时把 5 字段也按 second=0 处理。
 function parseCronToState(cron: string) {
-  const d = { freq: "daily" as FreqType, hour: 6, minute: 0, weekday: 1, monthday: 1, intervalMin: 30, custom: cron };
+  const d = {
+    freq: "daily" as FreqType,
+    second: 0, hour: 6, minute: 0,
+    weekday: 1, monthday: 1,
+    intervalMin: 30, intervalSec: 30,
+    custom: cron,
+  };
   if (!cron) return d;
   const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5) return { ...d, freq: "custom" as FreqType };
-  const [min, hr, dom, , dow] = parts;
-  if (min.startsWith("*/") && hr === "*") {
+  let sec: string, min: string, hr: string, dom: string, dow: string;
+  if (parts.length === 6) [sec, min, hr, dom, , dow] = parts;
+  else if (parts.length === 5) {
+    [min, hr, dom, , dow] = parts;
+    sec = "0";
+  } else return { ...d, freq: "custom" as FreqType };
+
+  // 每 N 秒
+  if (sec.startsWith("*/") && min === "*" && hr === "*") {
+    const n = parseInt(sec.slice(2));
+    if (!isNaN(n)) return { ...d, freq: "intervalSec" as FreqType, intervalSec: n };
+  }
+  // 每 N 分
+  if (sec === "0" && min.startsWith("*/") && hr === "*") {
     const n = parseInt(min.slice(2));
     if (!isNaN(n)) return { ...d, freq: "interval" as FreqType, intervalMin: n };
   }
-  const m = parseInt(min), h = parseInt(hr);
-  if (isNaN(m) || isNaN(h)) return { ...d, freq: "custom" as FreqType };
-  if (dom === "*" && dow !== "*") { const x = parseInt(dow); if (!isNaN(x)) return { ...d, freq: "weekly" as FreqType, hour: h, minute: m, weekday: x } }
-  if (dom !== "*" && dow === "*") { const x = parseInt(dom); if (!isNaN(x)) return { ...d, freq: "monthly" as FreqType, hour: h, minute: m, monthday: x } }
-  if (dom === "*" && dow === "*") return { ...d, freq: "daily" as FreqType, hour: h, minute: m };
+
+  const s = parseInt(sec), m = parseInt(min), h = parseInt(hr);
+  if (isNaN(s) || isNaN(m) || isNaN(h)) return { ...d, freq: "custom" as FreqType };
+  if (dom === "*" && dow !== "*") { const x = parseInt(dow); if (!isNaN(x)) return { ...d, freq: "weekly" as FreqType, second: s, hour: h, minute: m, weekday: x } }
+  if (dom !== "*" && dow === "*") { const x = parseInt(dom); if (!isNaN(x)) return { ...d, freq: "monthly" as FreqType, second: s, hour: h, minute: m, monthday: x } }
+  if (dom === "*" && dow === "*") return { ...d, freq: "daily" as FreqType, second: s, hour: h, minute: m };
   return { ...d, freq: "custom" as FreqType };
 }
 
-function buildCron(s: { freq: FreqType; hour: number; minute: number; weekday: number; monthday: number; intervalMin: number; custom: string }) {
+function buildCron(s: { freq: FreqType; second: number; hour: number; minute: number; weekday: number; monthday: number; intervalMin: number; intervalSec: number; custom: string }) {
   switch (s.freq) {
-    case "daily": return `${s.minute} ${s.hour} * * *`;
-    case "weekly": return `${s.minute} ${s.hour} * * ${s.weekday}`;
-    case "monthly": return `${s.minute} ${s.hour} ${s.monthday} * *`;
-    case "interval": return `*/${s.intervalMin} * * * *`;
+    case "daily": return `${s.second} ${s.minute} ${s.hour} * * *`;
+    case "weekly": return `${s.second} ${s.minute} ${s.hour} * * ${s.weekday}`;
+    case "monthly": return `${s.second} ${s.minute} ${s.hour} ${s.monthday} * *`;
+    case "interval": return `0 */${s.intervalMin} * * * *`;
+    case "intervalSec": return `*/${s.intervalSec} * * * * *`;
     case "custom": return s.custom;
   }
 }
@@ -144,16 +165,18 @@ function SyncPanel() {
   const [saving, setSaving] = useState(false);
 
   const [freq, setFreq] = useState<FreqType>("daily");
+  const [second, setSecond] = useState(0);
   const [hour, setHour] = useState(6);
   const [minute, setMinute] = useState(0);
   const [weekday, setWeekday] = useState(1);
   const [monthday, setMonthday] = useState(1);
   const [intervalMin, setIntervalMin] = useState(30);
+  const [intervalSec, setIntervalSec] = useState(30);
   const [custom, setCustom] = useState("");
 
   const cronExpr = useMemo(
-    () => buildCron({ freq, hour, minute, weekday, monthday, intervalMin, custom }),
-    [freq, hour, minute, weekday, monthday, intervalMin, custom]
+    () => buildCron({ freq, second, hour, minute, weekday, monthday, intervalMin, intervalSec, custom }),
+    [freq, second, hour, minute, weekday, monthday, intervalMin, intervalSec, custom]
   );
 
   async function load() {
@@ -164,8 +187,8 @@ function SyncPanel() {
     setStatus(s);
     setEnabled(sch.enabled);
     const p = parseCronToState(sch.cronExpr);
-    setFreq(p.freq); setHour(p.hour); setMinute(p.minute);
-    setWeekday(p.weekday); setMonthday(p.monthday); setIntervalMin(p.intervalMin); setCustom(p.custom);
+    setFreq(p.freq); setSecond(p.second); setHour(p.hour); setMinute(p.minute);
+    setWeekday(p.weekday); setMonthday(p.monthday); setIntervalMin(p.intervalMin); setIntervalSec(p.intervalSec); setCustom(p.custom);
   }
   useEffect(() => { load(); }, []);
 
@@ -242,8 +265,8 @@ function SyncPanel() {
             <div className="space-y-2">
               <Label className="text-xs">执行计划</Label>
               <div className="flex flex-wrap gap-1">
-                {(["daily","weekly","monthly","interval","custom"] as FreqType[]).map((v) => {
-                  const labels = { daily: "每天", weekly: "每周", monthly: "每月", interval: "每N分钟", custom: "自定义" } as const;
+                {(["daily","weekly","monthly","interval","intervalSec","custom"] as FreqType[]).map((v) => {
+                  const labels = { daily: "每天", weekly: "每周", monthly: "每月", interval: "每N分钟", intervalSec: "每N秒", custom: "自定义" } as const;
                   return (
                     <Button key={v} type="button" size="sm" variant={freq === v ? "default" : "outline"} className="text-xs h-7" disabled={!enabled} onClick={() => setFreq(v)}>
                       {labels[v]}
@@ -254,9 +277,9 @@ function SyncPanel() {
             </div>
 
             {enabled && (freq === "daily" || freq === "weekly" || freq === "monthly") && (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 {freq === "weekly" && (
-                  <div className="space-y-1 sm:col-span-2">
+                  <div className="space-y-1 sm:col-span-3">
                     <Label className="text-xs">星期</Label>
                     <Select value={String(weekday)} onValueChange={(v) => setWeekday(+v)}>
                       <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
@@ -265,7 +288,7 @@ function SyncPanel() {
                   </div>
                 )}
                 {freq === "monthly" && (
-                  <div className="space-y-1 sm:col-span-2">
+                  <div className="space-y-1 sm:col-span-3">
                     <Label className="text-xs">日期</Label>
                     <Input type="number" min={1} max={28} value={monthday} onChange={(e) => setMonthday(Math.min(28, Math.max(1, +e.target.value)))} className="h-8" />
                   </div>
@@ -278,6 +301,10 @@ function SyncPanel() {
                   <Label className="text-xs">分</Label>
                   <Input type="number" min={0} max={59} value={minute} onChange={(e) => setMinute(Math.min(59, Math.max(0, +e.target.value)))} className="h-8" />
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">秒</Label>
+                  <Input type="number" min={0} max={59} value={second} onChange={(e) => setSecond(Math.min(59, Math.max(0, +e.target.value)))} className="h-8" />
+                </div>
               </div>
             )}
 
@@ -288,10 +315,18 @@ function SyncPanel() {
               </div>
             )}
 
+            {enabled && freq === "intervalSec" && (
+              <div className="space-y-1">
+                <Label className="text-xs">间隔（秒）</Label>
+                <Input type="number" min={1} max={3600} value={intervalSec} onChange={(e) => setIntervalSec(Math.min(3600, Math.max(1, +e.target.value)))} className="h-8" />
+                <p className="text-[11px] text-muted-foreground">秒级频率主要用于调试，正式场景慎用（每秒触发会持续打 DB / 钉钉接口）。</p>
+              </div>
+            )}
+
             {enabled && freq === "custom" && (
               <div className="space-y-1">
-                <Label className="text-xs">Cron 表达式</Label>
-                <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="0 6 * * *" className="h-8 font-mono text-sm" />
+                <Label className="text-xs">Cron 表达式（5 段或 6 段都支持，6 段第一位是秒）</Label>
+                <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="0 0 6 * * *" className="h-8 font-mono text-sm" />
               </div>
             )}
 
@@ -334,15 +369,17 @@ function CheckPanel() {
   const [schedSaving, setSchedSaving] = useState(false);
   const [schedNextRun, setSchedNextRun] = useState<string>("");
   const [freq, setFreq] = useState<FreqType>("daily");
+  const [second, setSecond] = useState(0);
   const [hour, setHour] = useState(20);
   const [minute, setMinute] = useState(0);
   const [weekday, setWeekday] = useState(1);
   const [monthday, setMonthday] = useState(1);
   const [intervalMin, setIntervalMin] = useState(30);
+  const [intervalSec, setIntervalSec] = useState(30);
   const [custom, setCustom] = useState("");
   const cronExpr = useMemo(
-    () => buildCron({ freq, hour, minute, weekday, monthday, intervalMin, custom }),
-    [freq, hour, minute, weekday, monthday, intervalMin, custom]
+    () => buildCron({ freq, second, hour, minute, weekday, monthday, intervalMin, intervalSec, custom }),
+    [freq, second, hour, minute, weekday, monthday, intervalMin, intervalSec, custom]
   );
 
   async function load(d = date) {
@@ -354,8 +391,8 @@ function CheckPanel() {
     setSchedEnabled(sch.enabled);
     setSchedNextRun(sch.nextRun);
     const p = parseCronToState(sch.cronExpr || "0 20 * * *");
-    setFreq(p.freq); setHour(p.hour); setMinute(p.minute);
-    setWeekday(p.weekday); setMonthday(p.monthday); setIntervalMin(p.intervalMin); setCustom(p.custom);
+    setFreq(p.freq); setSecond(p.second); setHour(p.hour); setMinute(p.minute);
+    setWeekday(p.weekday); setMonthday(p.monthday); setIntervalMin(p.intervalMin); setIntervalSec(p.intervalSec); setCustom(p.custom);
   }
   useEffect(() => { load(date); }, [date]);
   useEffect(() => { loadSchedule(); }, []);
@@ -413,8 +450,8 @@ function CheckPanel() {
           <div className="space-y-2">
             <Label className="text-xs">执行计划</Label>
             <div className="flex flex-wrap gap-1">
-              {(["daily","weekly","monthly","interval","custom"] as FreqType[]).map((v) => {
-                const labels = { daily: "每天", weekly: "每周", monthly: "每月", interval: "每N分钟", custom: "自定义" } as const;
+              {(["daily","weekly","monthly","interval","intervalSec","custom"] as FreqType[]).map((v) => {
+                const labels = { daily: "每天", weekly: "每周", monthly: "每月", interval: "每N分钟", intervalSec: "每N秒", custom: "自定义" } as const;
                 return (
                   <Button key={v} type="button" size="sm" variant={freq === v ? "default" : "outline"} className="text-xs h-7" disabled={!schedEnabled} onClick={() => setFreq(v)}>
                     {labels[v]}
@@ -425,9 +462,9 @@ function CheckPanel() {
           </div>
 
           {schedEnabled && (freq === "daily" || freq === "weekly" || freq === "monthly") && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               {freq === "weekly" && (
-                <div className="space-y-1 sm:col-span-2">
+                <div className="space-y-1 sm:col-span-3">
                   <Label className="text-xs">星期</Label>
                   <Select value={String(weekday)} onValueChange={(v) => setWeekday(+v)}>
                     <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
@@ -436,7 +473,7 @@ function CheckPanel() {
                 </div>
               )}
               {freq === "monthly" && (
-                <div className="space-y-1 sm:col-span-2">
+                <div className="space-y-1 sm:col-span-3">
                   <Label className="text-xs">日期</Label>
                   <Input type="number" min={1} max={28} value={monthday} onChange={(e) => setMonthday(Math.min(28, Math.max(1, +e.target.value)))} className="h-8" />
                 </div>
@@ -449,6 +486,10 @@ function CheckPanel() {
                 <Label className="text-xs">分</Label>
                 <Input type="number" min={0} max={59} value={minute} onChange={(e) => setMinute(Math.min(59, Math.max(0, +e.target.value)))} className="h-8" />
               </div>
+              <div className="space-y-1">
+                <Label className="text-xs">秒</Label>
+                <Input type="number" min={0} max={59} value={second} onChange={(e) => setSecond(Math.min(59, Math.max(0, +e.target.value)))} className="h-8" />
+              </div>
             </div>
           )}
 
@@ -459,10 +500,18 @@ function CheckPanel() {
             </div>
           )}
 
+          {schedEnabled && freq === "intervalSec" && (
+            <div className="space-y-1">
+              <Label className="text-xs">间隔（秒）</Label>
+              <Input type="number" min={1} max={3600} value={intervalSec} onChange={(e) => setIntervalSec(Math.min(3600, Math.max(1, +e.target.value)))} className="h-8" />
+              <p className="text-[11px] text-muted-foreground">秒级频率主要用于调试，正式场景慎用（每秒触发会持续打 DB / 钉钉接口）。</p>
+            </div>
+          )}
+
           {schedEnabled && freq === "custom" && (
             <div className="space-y-1">
-              <Label className="text-xs">Cron 表达式</Label>
-              <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="0 20 * * *" className="h-8 font-mono text-sm" />
+              <Label className="text-xs">Cron 表达式（5 段或 6 段都支持，6 段第一位是秒）</Label>
+              <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="0 0 20 * * *" className="h-8 font-mono text-sm" />
             </div>
           )}
 
