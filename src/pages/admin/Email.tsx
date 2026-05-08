@@ -42,12 +42,18 @@ interface EmailSchedule {
 interface EmailLog {
   id: number;
   scheduleId: number;
+  templateId: number;
+  templateName: string;
+  source: string;
+  sourceLabel: string;
   status: string;
   total: number;
   failCount: number;
   retryCount: number;
   sentAt: string;
 }
+
+interface FailItem { email: string; error: string }
 
 interface Hotel {
   id: number;
@@ -610,8 +616,11 @@ function LogsTab() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [failList, setFailList] = useState<string[]>([]);
+  const [failList, setFailList] = useState<FailItem[]>([]);
   const [failDialogOpen, setFailDialogOpen] = useState(false);
+  const [failTitle, setFailTitle] = useState("");
+  const [retryingId, setRetryingId] = useState<number | null>(null);
+  const [retryAllRunning, setRetryAllRunning] = useState(false);
 
   async function load(p = page) {
     setLoading(true);
@@ -624,17 +633,48 @@ function LogsTab() {
     }
   }
 
-  useEffect(() => { load(); }, [page]);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [page]);
 
-  async function viewFails(id: number) {
-    const resp = await request<{ list: string[] }>(`/api/email/logs/${id}/fail-list`);
+  async function viewFails(l: EmailLog) {
+    const resp = await request<{ list: FailItem[] }>(`/api/email/logs/${l.id}/fail-list`);
     setFailList(resp.list ?? []);
+    setFailTitle(`#${l.id} 失败列表（${l.templateName || "—"}）`);
     setFailDialogOpen(true);
   }
 
-  async function retry(id: number) {
-    await request(`/api/email/logs/${id}/retry`, { method: "POST" });
-    load();
+  async function retryOne(l: EmailLog) {
+    if (!confirm(`重发 ${l.failCount} 个失败邮箱？将使用模板「${l.templateName || `#${l.templateId}`}」`)) return;
+    setRetryingId(l.id);
+    try {
+      await request(`/api/email/logs/${l.id}/retry`, { method: "POST" });
+      toast.success("已发起重发，刷新查看新日志");
+      await load(1);
+      setPage(1);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "重发失败");
+    } finally {
+      setRetryingId(null);
+    }
+  }
+
+  async function retryAll() {
+    const failedCount = logs.filter((l) => l.failCount > 0 && l.templateId > 0).length;
+    if (failedCount === 0) {
+      toast.info("当前页没有可重发的失败日志");
+      return;
+    }
+    if (!confirm(`一键重发当前所有 status 为「失败 / 部分失败」的日志？(后端会按 status + template_id > 0 + fail_count > 0 拉取所有，可能不止当前页这 ${failedCount} 条)`)) return;
+    setRetryAllRunning(true);
+    try {
+      const resp = await request<{ message: string }>("/api/email/logs/retry-all-failed", { method: "POST" });
+      toast.success(resp.message || "已开始异步重发");
+      setTimeout(() => load(1), 1500);
+      setPage(1);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "重发失败");
+    } finally {
+      setRetryAllRunning(false);
+    }
   }
 
   const STATUS_MAP: Record<string, { label: string; variant: "default" | "secondary" | "destructive" }> = {
@@ -643,52 +683,80 @@ function LogsTab() {
     failed: { label: "失败", variant: "destructive" },
   };
 
-  const totalPages = Math.ceil(total / 20);
+  const totalPages = Math.max(1, Math.ceil(total / 20));
+  const hasFailedAny = logs.some((l) => l.failCount > 0 && l.templateId > 0);
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          共 {total} 条日志，当前第 {page}/{totalPages} 页
+        </div>
+        <Button onClick={retryAll} disabled={retryAllRunning || !hasFailedAny} size="sm" className="gap-1.5" variant="outline">
+          <RotateCcw className={`h-3.5 w-3.5 ${retryAllRunning ? "animate-spin" : ""}`} />
+          {retryAllRunning ? "重发中…" : "一键重发所有失败"}
+        </Button>
+      </div>
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>调度ID</TableHead>
+                <TableHead className="w-12">#</TableHead>
+                <TableHead>来源</TableHead>
+                <TableHead>模板</TableHead>
                 <TableHead>状态</TableHead>
-                <TableHead>总数</TableHead>
-                <TableHead>失败</TableHead>
-                <TableHead>重试</TableHead>
+                <TableHead className="text-right">总数</TableHead>
+                <TableHead className="text-right">失败</TableHead>
+                <TableHead className="text-right">重试</TableHead>
                 <TableHead>发送时间</TableHead>
                 <TableHead>操作</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">加载中...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">加载中...</TableCell></TableRow>
               ) : logs.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">暂无日志</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">暂无日志</TableCell></TableRow>
               ) : logs.map((l) => {
                 const s = STATUS_MAP[l.status] ?? { label: l.status, variant: "secondary" as const };
                 return (
                   <TableRow key={l.id}>
-                    <TableCell className="font-mono text-xs">{l.id}</TableCell>
-                    <TableCell className="font-mono text-xs">{l.scheduleId}</TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">{l.id}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-[10px]">{l.sourceLabel || "—"}</Badge>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {l.templateName ? (
+                        <span className="inline-flex items-center gap-1"><FileText className="h-3 w-3 text-muted-foreground" />{l.templateName}</span>
+                      ) : (
+                        <span className="text-muted-foreground italic">未知</span>
+                      )}
+                    </TableCell>
                     <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
-                    <TableCell>{l.total}</TableCell>
-                    <TableCell>{l.failCount > 0 ? <span className="text-destructive font-medium">{l.failCount}</span> : 0}</TableCell>
-                    <TableCell>{l.retryCount}</TableCell>
-                    <TableCell className="text-xs">{l.sentAt ? new Date(l.sentAt).toLocaleString("zh-CN") : "-"}</TableCell>
+                    <TableCell className="text-right tabular-nums">{l.total}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {l.failCount > 0 ? <span className="text-destructive font-medium">{l.failCount}</span> : <span className="text-muted-foreground">0</span>}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{l.retryCount > 0 ? l.retryCount : "—"}</TableCell>
+                    <TableCell className="text-xs">{l.sentAt ? new Date(l.sentAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         {l.failCount > 0 && (
-                          <>
-                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => viewFails(l.id)}>
-                              <Eye className="h-3 w-3" /> 详情
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => retry(l.id)}>
-                              <RotateCcw className="h-3 w-3" /> 重试
-                            </Button>
-                          </>
+                          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => viewFails(l)}>
+                            <Eye className="h-3 w-3" /> 失败详情
+                          </Button>
+                        )}
+                        {l.failCount > 0 && l.templateId > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            disabled={retryingId === l.id}
+                            onClick={() => retryOne(l)}
+                          >
+                            <RotateCcw className={`h-3 w-3 ${retryingId === l.id ? "animate-spin" : ""}`} /> 重发
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -709,15 +777,18 @@ function LogsTab() {
       )}
 
       <Dialog open={failDialogOpen} onOpenChange={setFailDialogOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>失败列表</DialogTitle>
+            <DialogTitle>{failTitle}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-1 max-h-60 overflow-auto">
+          <div className="space-y-2 max-h-80 overflow-auto">
             {failList.length === 0 ? (
               <p className="text-sm text-muted-foreground">无</p>
-            ) : failList.map((email, i) => (
-              <div key={i} className="text-sm font-mono bg-muted rounded px-2 py-1">{email}</div>
+            ) : failList.map((it, i) => (
+              <div key={i} className="rounded border bg-muted/30 px-2 py-1.5 space-y-0.5">
+                <div className="text-sm font-mono">{it.email}</div>
+                {it.error && <div className="text-xs text-destructive">{it.error}</div>}
+              </div>
             ))}
           </div>
         </DialogContent>
@@ -1383,7 +1454,6 @@ export default function AdminEmail() {
           <TabsTrigger value="smtp">发件配置</TabsTrigger>
           <TabsTrigger value="templates">邮件模板</TabsTrigger>
           <TabsTrigger value="groups">邮件组</TabsTrigger>
-          <TabsTrigger value="schedules">发送调度</TabsTrigger>
           <TabsTrigger value="blast">全员群发</TabsTrigger>
           <TabsTrigger value="logs">发送日志</TabsTrigger>
         </TabsList>
@@ -1395,9 +1465,6 @@ export default function AdminEmail() {
         </TabsContent>
         <TabsContent value="groups" className="mt-4">
           <GroupsTab />
-        </TabsContent>
-        <TabsContent value="schedules" className="mt-4">
-          <SchedulesTab />
         </TabsContent>
         <TabsContent value="blast" className="mt-4">
           <BlastTab />
