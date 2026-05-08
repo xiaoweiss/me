@@ -12,6 +12,7 @@ import { DayDetailDrawer } from "./DayDetailDrawer";
 import { Legend } from "./Legend";
 import { fetchMonthData, fetchThresholds } from "@/api/dashboardApi";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { DayData, Filters, ThresholdBand, MonthSummary } from "@/api/types";
 import { BarChart3, CalendarRange } from "lucide-react";
 
@@ -37,6 +38,7 @@ function formatDateCN(dateStr: string): string {
 
 export function Dashboard() {
   const { auth } = useAuth();
+  const isMobile = useIsMobile();
   const hotels = auth.status === "authenticated" ? auth.user.hotels ?? [] : [];
   const hotelIds = auth.status === "authenticated" ? auth.user.hotelIds ?? [] : [];
   const [selectedHotelId, setSelectedHotelId] = useState<number>(0);
@@ -80,7 +82,9 @@ export function Dashboard() {
 
   // 点击格子背景：
   // - 活动预订模式：打开当天活动明细 drawer
-  // - 出租率模式：有数据打开「日详情抽屉」，无数据 toast 提示
+  // - 出租率模式（仅移动端）：有数据打开「日详情抽屉」，无数据 toast 提示
+  // - 出租率模式（桌面端）：保持原行为不动 —— 桌面格子里已经有 4 时段对比 + C/M 按钮，
+  //   要看竞对/城市活动直接点格子里对应的徽标即可，不需要再多一层抽屉
   const handleDayClick = (date: string) => {
     if (mode === "bookings") {
       setVenueBookingDate(date);
@@ -90,6 +94,10 @@ export function Dashboard() {
     const d = days.find((x) => x.date === date);
     if (!d || !dayHasData(d)) {
       toast.info(`${formatDateCN(date)}暂无数据`);
+      return;
+    }
+    if (!isMobile) {
+      // 桌面端不弹日详情抽屉；保留原行为（点格子背景不做事，靠格子内部按钮触达详情）
       return;
     }
     setDayDetailDate(date);
