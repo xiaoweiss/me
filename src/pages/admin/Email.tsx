@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, ChevronDown, ChevronUp, RotateCcw, Eye, Save, Send, FileText, Clock, Mails } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -53,7 +54,6 @@ interface EmailLog {
   sentAt: string;
 }
 
-interface FailItem { email: string; error: string }
 
 interface Hotel {
   id: number;
@@ -611,16 +611,33 @@ function SchedulesTab() {
 
 // ---- Logs Tab ----
 
+interface RecipientItem {
+  id: number;
+  email: string;
+  status: "sent" | "failed" | string;
+  error: string;
+  retryCount: number;
+  sentAt: string;
+}
+
 function LogsTab() {
   const [logs, setLogs] = useState<EmailLog[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [failList, setFailList] = useState<FailItem[]>([]);
-  const [failDialogOpen, setFailDialogOpen] = useState(false);
-  const [failTitle, setFailTitle] = useState("");
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const [retryAllRunning, setRetryAllRunning] = useState(false);
+
+  // 抽屉：当前查看的 log 详情（收件人列表）
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeLog, setActiveLog] = useState<EmailLog | null>(null);
+  const [recList, setRecList] = useState<RecipientItem[]>([]);
+  const [recTotal, setRecTotal] = useState(0);
+  const [recPage, setRecPage] = useState(1);
+  const recPageSize = 20;
+  const [recStatus, setRecStatus] = useState<"" | "sent" | "failed">("");
+  const [recLoading, setRecLoading] = useState(false);
+  const [retryingRec, setRetryingRec] = useState<number | null>(null);
 
   async function load(p = page) {
     setLoading(true);
@@ -635,11 +652,38 @@ function LogsTab() {
 
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [page]);
 
-  async function viewFails(l: EmailLog) {
-    const resp = await request<{ list: FailItem[] }>(`/api/email/logs/${l.id}/fail-list`);
-    setFailList(resp.list ?? []);
-    setFailTitle(`#${l.id} 失败列表（${l.templateName || "—"}）`);
-    setFailDialogOpen(true);
+  async function loadRecipients(logId: number, p: number, status: typeof recStatus) {
+    setRecLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(p), pageSize: String(recPageSize) });
+      if (status) params.set("status", status);
+      const resp = await request<{ list: RecipientItem[]; total: number }>(`/api/email/logs/${logId}/recipients?${params}`);
+      setRecList(resp.list ?? []);
+      setRecTotal(resp.total ?? 0);
+    } finally { setRecLoading(false); }
+  }
+
+  async function openDrawer(l: EmailLog) {
+    setActiveLog(l);
+    setRecPage(1);
+    setRecStatus("");
+    setDrawerOpen(true);
+    await loadRecipients(l.id, 1, "");
+  }
+
+  async function retryRecipient(rec: RecipientItem) {
+    if (!activeLog) return;
+    setRetryingRec(rec.id);
+    try {
+      const resp = await request<{ message: string }>(`/api/email/logs/${activeLog.id}/recipients/${rec.id}/retry`, { method: "POST" });
+      toast.success(resp.message || "已发起重发");
+      // 等后端 goroutine 跑完再刷一下抽屉数据
+      setTimeout(() => loadRecipients(activeLog.id, recPage, recStatus), 1500);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "重发失败");
+    } finally {
+      setRetryingRec(null);
+    }
   }
 
   async function retryOne(l: EmailLog) {
@@ -742,11 +786,9 @@ function LogsTab() {
                     <TableCell className="text-xs">{l.sentAt ? new Date(l.sentAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        {l.failCount > 0 && (
-                          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => viewFails(l)}>
-                            <Eye className="h-3 w-3" /> 失败详情
-                          </Button>
-                        )}
+                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => openDrawer(l)}>
+                          <Eye className="h-3 w-3" /> 详情
+                        </Button>
                         {l.failCount > 0 && l.templateId > 0 && (
                           <Button
                             variant="ghost"
@@ -755,7 +797,7 @@ function LogsTab() {
                             disabled={retryingId === l.id}
                             onClick={() => retryOne(l)}
                           >
-                            <RotateCcw className={`h-3 w-3 ${retryingId === l.id ? "animate-spin" : ""}`} /> 重发
+                            <RotateCcw className={`h-3 w-3 ${retryingId === l.id ? "animate-spin" : ""}`} /> 重发失败
                           </Button>
                         )}
                       </div>
@@ -776,23 +818,100 @@ function LogsTab() {
         </div>
       )}
 
-      <Dialog open={failDialogOpen} onOpenChange={setFailDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{failTitle}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 max-h-80 overflow-auto">
-            {failList.length === 0 ? (
-              <p className="text-sm text-muted-foreground">无</p>
-            ) : failList.map((it, i) => (
-              <div key={i} className="rounded border bg-muted/30 px-2 py-1.5 space-y-0.5">
-                <div className="text-sm font-mono">{it.email}</div>
-                {it.error && <div className="text-xs text-destructive">{it.error}</div>}
+      {/* 详情抽屉：展示某条 log 的全部收件人 */}
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              发送详情 {activeLog ? `#${activeLog.id}` : ""}
+            </SheetTitle>
+            <SheetDescription>
+              {activeLog && (
+                <>
+                  来源 {activeLog.sourceLabel} · 模板「{activeLog.templateName || "—"}」 ·
+                  共 {activeLog.total} 封 / 失败 {activeLog.failCount} ·
+                  {activeLog.sentAt && ` ${new Date(activeLog.sentAt).toLocaleString("zh-CN")}`}
+                </>
+              )}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-4 flex gap-1">
+            {(["", "sent", "failed"] as const).map((s) => (
+              <Button
+                key={s || "all"}
+                size="sm"
+                variant={recStatus === s ? "default" : "outline"}
+                className="text-xs h-7"
+                onClick={() => {
+                  setRecStatus(s);
+                  setRecPage(1);
+                  if (activeLog) loadRecipients(activeLog.id, 1, s);
+                }}
+              >
+                {s === "" ? "全部" : s === "sent" ? "成功" : "失败"}
+              </Button>
+            ))}
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {recLoading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+            ) : recList.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">暂无</p>
+            ) : recList.map((rec) => (
+              <div key={rec.id || rec.email} className="rounded border bg-card px-3 py-2 flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-mono truncate">{rec.email}</span>
+                    <Badge variant={rec.status === "sent" ? "default" : "destructive"} className="text-[10px] h-4">
+                      {rec.status === "sent" ? "成功" : "失败"}
+                    </Badge>
+                    {rec.retryCount > 0 && (
+                      <Badge variant="outline" className="text-[10px] h-4">已重发 {rec.retryCount}</Badge>
+                    )}
+                  </div>
+                  {rec.error && <div className="text-xs text-destructive break-all">{rec.error}</div>}
+                  {rec.sentAt && (
+                    <div className="text-[10px] text-muted-foreground">{new Date(rec.sentAt).toLocaleString("zh-CN")}</div>
+                  )}
+                </div>
+                {rec.id > 0 && activeLog && activeLog.templateId > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs gap-1 shrink-0"
+                    disabled={retryingRec === rec.id}
+                    onClick={() => retryRecipient(rec)}
+                  >
+                    <RotateCcw className={`h-3 w-3 ${retryingRec === rec.id ? "animate-spin" : ""}`} />
+                    重发
+                  </Button>
+                )}
               </div>
             ))}
           </div>
-        </DialogContent>
-      </Dialog>
+
+          {recTotal > recPageSize && (
+            <div className="mt-4 flex items-center justify-center gap-2">
+              <Button variant="outline" size="sm" disabled={recPage <= 1} onClick={() => {
+                const p = recPage - 1;
+                setRecPage(p);
+                if (activeLog) loadRecipients(activeLog.id, p, recStatus);
+              }}>上一页</Button>
+              <span className="text-xs text-muted-foreground">
+                {recPage} / {Math.ceil(recTotal / recPageSize)}（共 {recTotal} 条）
+              </span>
+              <Button variant="outline" size="sm" disabled={recPage * recPageSize >= recTotal} onClick={() => {
+                const p = recPage + 1;
+                setRecPage(p);
+                if (activeLog) loadRecipients(activeLog.id, p, recStatus);
+              }}>下一页</Button>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
