@@ -329,11 +329,36 @@ function CheckPanel() {
   const [data, setData] = useState<UpdateCheckResp | null>(null);
   const [running, setRunning] = useState(false);
 
+  // 调度配置
+  const [schedEnabled, setSchedEnabled] = useState(true);
+  const [schedSaving, setSchedSaving] = useState(false);
+  const [schedNextRun, setSchedNextRun] = useState<string>("");
+  const [freq, setFreq] = useState<FreqType>("daily");
+  const [hour, setHour] = useState(20);
+  const [minute, setMinute] = useState(0);
+  const [weekday, setWeekday] = useState(1);
+  const [monthday, setMonthday] = useState(1);
+  const [intervalMin, setIntervalMin] = useState(30);
+  const [custom, setCustom] = useState("");
+  const cronExpr = useMemo(
+    () => buildCron({ freq, hour, minute, weekday, monthday, intervalMin, custom }),
+    [freq, hour, minute, weekday, monthday, intervalMin, custom]
+  );
+
   async function load(d = date) {
     const r = await request<UpdateCheckResp>(`/api/admin/update-checks?date=${d}`);
     setData(r);
   }
+  async function loadSchedule() {
+    const sch = await request<SyncSchedule>("/api/admin/update-checks/schedule");
+    setSchedEnabled(sch.enabled);
+    setSchedNextRun(sch.nextRun);
+    const p = parseCronToState(sch.cronExpr || "0 20 * * *");
+    setFreq(p.freq); setHour(p.hour); setMinute(p.minute);
+    setWeekday(p.weekday); setMonthday(p.monthday); setIntervalMin(p.intervalMin); setCustom(p.custom);
+  }
   useEffect(() => { load(date); }, [date]);
+  useEffect(() => { loadSchedule(); }, []);
 
   async function trigger() {
     setRunning(true);
@@ -348,6 +373,20 @@ function CheckPanel() {
     } finally { setRunning(false); }
   }
 
+  async function saveSchedule() {
+    setSchedSaving(true);
+    try {
+      await request("/api/admin/update-checks/schedule", {
+        method: "PUT",
+        body: JSON.stringify({ cronExpr, enabled: schedEnabled }),
+      });
+      await loadSchedule();
+      toast.success("调度配置已保存");
+    } catch (e) {
+      toast.error("保存失败", { description: e instanceof Error ? e.message : "" });
+    } finally { setSchedSaving(false); }
+  }
+
   return (
     <>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -355,6 +394,88 @@ function CheckPanel() {
         <StatCard icon={CheckCircle2} label="今日已录入" value={data?.updated ?? 0} tone="good" />
         <StatCard icon={ShieldAlert} label="今日未录入" value={data?.missing ?? 0} tone={data && data.missing > 0 ? "bad" : "good"} />
       </div>
+
+      {/* 定时调度卡 */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <div className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-sm"><Clock className="h-4 w-4 text-primary" />定时检测</CardTitle>
+            {schedNextRun && (
+              <Badge variant="outline" className="text-[10px]">下次：{new Date(schedNextRun).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{schedEnabled ? "已启用" : "已停用"}</span>
+            <Switch checked={schedEnabled} onCheckedChange={setSchedEnabled} />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label className="text-xs">执行计划</Label>
+            <div className="flex flex-wrap gap-1">
+              {(["daily","weekly","monthly","interval","custom"] as FreqType[]).map((v) => {
+                const labels = { daily: "每天", weekly: "每周", monthly: "每月", interval: "每N分钟", custom: "自定义" } as const;
+                return (
+                  <Button key={v} type="button" size="sm" variant={freq === v ? "default" : "outline"} className="text-xs h-7" disabled={!schedEnabled} onClick={() => setFreq(v)}>
+                    {labels[v]}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+
+          {schedEnabled && (freq === "daily" || freq === "weekly" || freq === "monthly") && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {freq === "weekly" && (
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-xs">星期</Label>
+                  <Select value={String(weekday)} onValueChange={(v) => setWeekday(+v)}>
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>{WEEKDAYS.map((d, i) => <SelectItem key={i} value={String(i)}>{d}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              )}
+              {freq === "monthly" && (
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-xs">日期</Label>
+                  <Input type="number" min={1} max={28} value={monthday} onChange={(e) => setMonthday(Math.min(28, Math.max(1, +e.target.value)))} className="h-8" />
+                </div>
+              )}
+              <div className="space-y-1">
+                <Label className="text-xs">时</Label>
+                <Input type="number" min={0} max={23} value={hour} onChange={(e) => setHour(Math.min(23, Math.max(0, +e.target.value)))} className="h-8" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">分</Label>
+                <Input type="number" min={0} max={59} value={minute} onChange={(e) => setMinute(Math.min(59, Math.max(0, +e.target.value)))} className="h-8" />
+              </div>
+            </div>
+          )}
+
+          {schedEnabled && freq === "interval" && (
+            <div className="space-y-1">
+              <Label className="text-xs">间隔（分钟）</Label>
+              <Input type="number" min={1} max={1440} value={intervalMin} onChange={(e) => setIntervalMin(Math.min(1440, Math.max(1, +e.target.value)))} className="h-8" />
+            </div>
+          )}
+
+          {schedEnabled && freq === "custom" && (
+            <div className="space-y-1">
+              <Label className="text-xs">Cron 表达式</Label>
+              <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="0 20 * * *" className="h-8 font-mono text-sm" />
+            </div>
+          )}
+
+          <div className="rounded-lg border bg-muted/30 px-3 py-2 flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">生成：</span>
+            <code className="text-xs font-mono font-medium bg-background border px-1.5 py-0.5 rounded">{cronExpr}</code>
+          </div>
+
+          <Button onClick={saveSchedule} disabled={schedSaving || !cronExpr} className="w-full gap-2" size="sm">
+            <Save className="h-3.5 w-3.5" />{schedSaving ? "保存中…" : "保存调度配置"}
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
