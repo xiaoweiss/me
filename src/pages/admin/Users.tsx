@@ -9,13 +9,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, Plus, Mail } from "lucide-react";
+import { Building2, Plus, Mail, Phone } from "lucide-react";
 import { toast } from "sonner";
 
 interface AdminUser {
   id: number;
   name: string;
   email: string;
+  phone: string;
   status: string;
   hotelIds: number[];
   roleId: number;
@@ -53,6 +54,7 @@ export default function AdminUsers() {
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [newPhone, setNewPhone] = useState("");
   const [newRoleId, setNewRoleId] = useState("0");
   const [creating, setCreating] = useState(false);
 
@@ -60,6 +62,11 @@ export default function AdminUsers() {
   const [editEmailUserId, setEditEmailUserId] = useState<number | null>(null);
   const [editEmailValue, setEditEmailValue] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
+
+  const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
+  const [editPhoneUserId, setEditPhoneUserId] = useState<number | null>(null);
+  const [editPhoneValue, setEditPhoneValue] = useState("");
+  const [savingPhone, setSavingPhone] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -146,16 +153,40 @@ export default function AdminUsers() {
     }
   }
 
+  function openPhoneDialog(user: AdminUser) {
+    setEditPhoneUserId(user.id);
+    setEditPhoneValue(user.phone || "");
+    setPhoneDialogOpen(true);
+  }
+
+  async function savePhone() {
+    if (editPhoneUserId === null) return;
+    setSavingPhone(true);
+    try {
+      await request(`/api/admin/users/${editPhoneUserId}/phone`, {
+        method: "PUT",
+        body: JSON.stringify({ phone: editPhoneValue.trim() }),
+      });
+      toast.success("手机号已更新");
+      setPhoneDialogOpen(false);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "更新失败");
+    } finally {
+      setSavingPhone(false);
+    }
+  }
+
   async function createAdmin() {
     setCreating(true);
     try {
       await request("/api/admin/users", {
         method: "POST",
-        body: JSON.stringify({ username: newUsername, password: newPassword, email: newEmail, roleId: Number(newRoleId) }),
+        body: JSON.stringify({ username: newUsername, password: newPassword, email: newEmail, phone: newPhone, roleId: Number(newRoleId) }),
       });
       toast.success("管理员账号已创建");
       setCreateOpen(false);
-      setNewUsername(""); setNewPassword(""); setNewEmail(""); setNewRoleId("0");
+      setNewUsername(""); setNewPassword(""); setNewEmail(""); setNewPhone(""); setNewRoleId("0");
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "创建失败");
@@ -186,6 +217,7 @@ export default function AdminUsers() {
                 <TableHead>ID</TableHead>
                 <TableHead>姓名</TableHead>
                 <TableHead>邮箱</TableHead>
+                <TableHead>手机号</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>角色</TableHead>
                 <TableHead>关联酒店</TableHead>
@@ -194,9 +226,9 @@ export default function AdminUsers() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">加载中...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">加载中...</TableCell></TableRow>
               ) : users.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">暂无用户</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">暂无用户</TableCell></TableRow>
               ) : users.map((u) => {
                 const s = STATUS_MAP[u.status] ?? { label: u.status, variant: "secondary" as const };
                 return (
@@ -213,6 +245,19 @@ export default function AdminUsers() {
                         <Mail className="h-3 w-3" />
                         <span className={u.email ? "" : "text-muted-foreground italic"}>
                           {u.email || "未设置"}
+                        </span>
+                      </Button>
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1 font-normal"
+                        onClick={() => openPhoneDialog(u)}
+                      >
+                        <Phone className="h-3 w-3" />
+                        <span className={u.phone ? "" : "text-muted-foreground italic"}>
+                          {u.phone || "未设置"}
                         </span>
                       </Button>
                     </TableCell>
@@ -281,6 +326,36 @@ export default function AdminUsers() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={phoneDialogOpen} onOpenChange={setPhoneDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              编辑手机号 — {users.find((u) => u.id === editPhoneUserId)?.name ?? ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1">
+            <Label>手机号</Label>
+            <Input
+              type="tel"
+              inputMode="numeric"
+              value={editPhoneValue}
+              onChange={(e) => setEditPhoneValue(e.target.value)}
+              placeholder="11 位手机号（留空即清除）"
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground pt-1">
+              留空可清除手机号；手机号用于接收数据未录入提醒等短信通知。
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPhoneDialogOpen(false)}>取消</Button>
+            <Button onClick={savePhone} disabled={savingPhone}>
+              {savingPhone ? "保存中..." : "保存"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -327,6 +402,16 @@ export default function AdminUsers() {
             <div className="space-y-1">
               <Label>邮箱（可选）</Label>
               <Input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="admin@example.com" />
+            </div>
+            <div className="space-y-1">
+              <Label>手机号（可选）</Label>
+              <Input
+                type="tel"
+                inputMode="numeric"
+                value={newPhone}
+                onChange={(e) => setNewPhone(e.target.value)}
+                placeholder="11 位手机号，用于接收短信通知"
+              />
             </div>
             <div className="space-y-1">
               <Label>角色</Label>
