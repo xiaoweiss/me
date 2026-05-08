@@ -85,6 +85,43 @@ function GroupsTab() {
   const [formScene, setFormScene] = useState("");
   const [formMembers, setFormMembers] = useState<{ userId: number; name: string; email: string }[]>([]);
 
+  // 群发本组
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [sendTargetGroup, setSendTargetGroup] = useState<EmailGroup | null>(null);
+  const [sendTemplateId, setSendTemplateId] = useState("0");
+  const [sendTemplates, setSendTemplates] = useState<{ id: number; name: string; subject: string }[]>([]);
+  const [sendingGroup, setSendingGroup] = useState(false);
+
+  async function openSendDialog(g: EmailGroup) {
+    setSendTargetGroup(g);
+    setSendTemplateId("0");
+    if (sendTemplates.length === 0) {
+      const r = await request<{ list: { id: number; name: string; subject: string }[] }>("/api/admin/mail-templates");
+      setSendTemplates(r.list ?? []);
+    }
+    setSendDialogOpen(true);
+  }
+
+  async function confirmSendGroup() {
+    if (!sendTargetGroup || sendTemplateId === "0") {
+      toast.error("请选择邮件模板");
+      return;
+    }
+    setSendingGroup(true);
+    try {
+      const resp = await request<{ message: string }>(`/api/email/groups/${sendTargetGroup.id}/send`, {
+        method: "POST",
+        body: JSON.stringify({ templateId: Number(sendTemplateId) }),
+      });
+      toast.success(resp.message || "已开始异步发送");
+      setSendDialogOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "发送失败");
+    } finally {
+      setSendingGroup(false);
+    }
+  }
+
   async function load(p = page, kw = keyword) {
     setLoading(true);
     try {
@@ -261,6 +298,9 @@ function GroupsTab() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
+                        <Button variant="default" size="sm" className="h-7 text-xs gap-1" onClick={() => openSendDialog(g)} disabled={g.memberCount === 0}>
+                          <Send className="h-3 w-3" /> 发送
+                        </Button>
                         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openDialog(g)}>编辑</Button>
                         <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => deleteGroup(g.id)}>
                           <Trash2 className="h-3 w-3" />
@@ -377,6 +417,43 @@ function GroupsTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>取消</Button>
             <Button onClick={saveGroup} disabled={!formName}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 群发邮件 dialog */}
+      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4 text-primary" />
+              群发邮件 — {sendTargetGroup?.name ?? ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+              将发送给该组 {sendTargetGroup?.memberCount ?? 0} 位成员，邮箱去重后并发投递（最多 6 个 SMTP 连接同时打开）。
+              结果会异步落到「发送日志」tab，无需在此等待。
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">选择发件模板</Label>
+              <Select value={sendTemplateId} onValueChange={setSendTemplateId}>
+                <SelectTrigger className="h-8"><SelectValue placeholder="请选择邮件模板" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">未选择</SelectItem>
+                  {sendTemplates.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>{t.name} —— {t.subject}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendDialogOpen(false)}>取消</Button>
+            <Button onClick={confirmSendGroup} disabled={sendingGroup || sendTemplateId === "0"} className="gap-1.5">
+              <Send className="h-3.5 w-3.5" />
+              {sendingGroup ? "发送中…" : "确定发送"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
