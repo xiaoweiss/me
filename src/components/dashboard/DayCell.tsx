@@ -46,11 +46,16 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
   const periodValues = mode === "occupancy" ? day.periodOccupancy : day.periodBookings;
 
   if (compact) {
-    // 移动端格子：每个时段一行，行内一气呵成「时段 / 本酒店 % / vs 竞对 · vs 商圈」
-    // 不再分上下两块，避免"上面色块 + 下面 2×2 尾巴"的视觉割裂
+    // 移动端格子：上半 M / A 横排色块，下半 C / M 差值列对齐，
+    // 这样"列 1 = 上午时段 = M 色块下方差值"，"列 2 = 下午"，关系一眼能看出来
     const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
     const suffix = mode === "occupancy" ? "%" : "";
-    const fmtDiff = (n: number) => (n > 0 ? "+" : "") + n + suffix;
+    // 紧凑差值：3 → "↑3%" / -2 → "↓2%" / 0 → "0"
+    const shortDiff = (n: number) => {
+      if (n === 0) return "0";
+      const arrow = n > 0 ? "↑" : "↓";
+      return arrow + Math.abs(n) + suffix;
+    };
     const diffClass = (n: number) =>
       n === 0 ? "text-muted-foreground/70" : n > 0 ? "text-emerald-600" : "text-red-500";
 
@@ -83,71 +88,70 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
           )}
         </div>
 
-        {/* 主体：M / A 两行，每行内集成本酒店 % + vs 竞对 / vs 商圈 */}
-        <div className="flex-1 flex flex-col gap-px px-0.5 pb-0.5">
+        {/* 上半：M / A 横排两列色块（本酒店各时段出租率） */}
+        <div className="grid grid-cols-2 gap-px px-0.5 pt-px">
           {PERIODS.map((p) => {
             const v = periodValues[p];
             const c = getThresholdColor(v, thresholds);
             const dim = highlightPeriod !== "All" && highlightPeriod !== p;
-
-            const cd = mode === "occupancy"
-              ? day.periodOccupancy[p] - day.competitorPeriodOccupancy[p]
-              : 0;
-            const md = mode === "occupancy"
-              ? day.periodOccupancy[p] - day.marketPeriodOccupancy[p]
-              : 0;
-            const compRaw = mode === "occupancy" ? day.competitorPeriodOccupancy[p] : day.competitorPeriodBookings[p];
-            const mktRaw = mode === "occupancy" ? day.marketPeriodOccupancy[p] : day.marketPeriodBookings[p];
-
             return (
               <div
                 key={p}
                 className={cn(
-                  "flex-1 flex items-center gap-1 rounded-sm px-1 transition-opacity",
+                  "rounded-sm flex flex-col items-center justify-center py-1 transition-opacity",
                   dim && "opacity-30",
                 )}
-                style={{ backgroundColor: `hsl(${c} / 0.18)` }}
+                style={{ backgroundColor: `hsl(${c} / 0.2)` }}
               >
-                <span className="text-[8px] font-medium text-muted-foreground leading-none w-2">
+                <span className="text-[7px] font-medium text-muted-foreground leading-none">
                   {PERIOD_LABELS[p]}
                 </span>
                 <span
-                  className="font-bold font-display text-[12px] leading-none flex-1"
+                  className="font-bold font-display text-[12px] leading-tight"
                   style={{ color: `hsl(${c})` }}
                 >
                   {mode === "occupancy" ? `${v}%` : v}
                 </span>
-                {/* 右侧两行 mini diff */}
-                <div className="flex flex-col items-end gap-px leading-none py-0.5">
-                  <button
-                    type="button"
-                    title="查看竞对活动"
-                    className="flex items-center gap-px active:bg-chart-comp/10 rounded transition-colors"
-                    onClick={(e) => { e.stopPropagation(); onCompetitorClick?.(day.date); }}
-                  >
-                    <span className="h-1 w-1 rounded-full bg-chart-comp shrink-0" />
-                    {mode === "occupancy" ? (
-                      <span className={cn("text-[8px] font-medium tabular-nums leading-none", diffClass(cd))}>
-                        {fmtDiff(cd)}
-                      </span>
-                    ) : (
-                      <span className="text-[8px] font-medium tabular-nums leading-none text-foreground/80">
-                        {compRaw}
-                      </span>
-                    )}
-                  </button>
-                  <div className="flex items-center gap-px">
-                    <span className="h-1 w-1 rounded-full bg-chart-market shrink-0" />
-                    {mode === "occupancy" ? (
-                      <span className={cn("text-[8px] font-medium tabular-nums leading-none", diffClass(md))}>
-                        {fmtDiff(md)}
-                      </span>
-                    ) : (
-                      <span className="text-[8px] font-medium tabular-nums leading-none text-foreground/80">
-                        {mktRaw}
-                      </span>
-                    )}
-                  </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 下半：C / M 差值，2 列跟上半时段对齐 */}
+        <div className="mt-auto grid grid-cols-2 gap-px px-0.5 pt-px pb-0.5">
+          {PERIODS.map((p) => {
+            const myV = day.periodOccupancy[p];
+            const cd = myV - day.competitorPeriodOccupancy[p];
+            const md = myV - day.marketPeriodOccupancy[p];
+            const compRaw = mode === "occupancy" ? day.competitorPeriodOccupancy[p] : day.competitorPeriodBookings[p];
+            const mktRaw = mode === "occupancy" ? day.marketPeriodOccupancy[p] : day.marketPeriodBookings[p];
+
+            return (
+              <div key={p} className="flex flex-col items-center gap-px leading-none">
+                <button
+                  type="button"
+                  title="查看竞对活动"
+                  className="flex items-center gap-0.5 active:bg-chart-comp/10 rounded transition-colors px-0.5"
+                  onClick={(e) => { e.stopPropagation(); onCompetitorClick?.(day.date); }}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-chart-comp shrink-0" />
+                  {mode === "occupancy" ? (
+                    <span className={cn("text-[8px] font-medium tabular-nums leading-none", diffClass(cd))}>
+                      {shortDiff(cd)}
+                    </span>
+                  ) : (
+                    <span className="text-[8px] font-medium tabular-nums leading-none text-foreground/80">{compRaw}</span>
+                  )}
+                </button>
+                <div className="flex items-center gap-0.5 px-0.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-chart-market shrink-0" />
+                  {mode === "occupancy" ? (
+                    <span className={cn("text-[8px] font-medium tabular-nums leading-none", diffClass(md))}>
+                      {shortDiff(md)}
+                    </span>
+                  ) : (
+                    <span className="text-[8px] font-medium tabular-nums leading-none text-foreground/80">{mktRaw}</span>
+                  )}
                 </div>
               </div>
             );
