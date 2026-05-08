@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { request } from "@/api/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, ChevronDown, ChevronUp, RotateCcw, Eye, Save, Send, FileText } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, RotateCcw, Eye, Save, Send, FileText, Clock, Mails } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
@@ -1085,6 +1085,218 @@ function TemplatesTab() {
 
 // ---- Main Page ----
 
+// ---- Blast (全员群发) Tab ----
+
+type BlastFreq = "daily" | "weekly" | "monthly" | "custom";
+const WEEKDAY_LABEL = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+function parseBlastCron(cron: string) {
+  const def = { freq: "daily" as BlastFreq, second: 0, minute: 0, hour: 8, weekday: 1, monthday: 1, custom: cron };
+  if (!cron) return def;
+  const p = cron.trim().split(/\s+/);
+  let sec: string, min: string, hr: string, dom: string, dow: string;
+  if (p.length === 6) [sec, min, hr, dom, , dow] = p;
+  else if (p.length === 5) { [min, hr, dom, , dow] = p; sec = "0"; }
+  else return { ...def, freq: "custom" as BlastFreq };
+  const s = +sec, m = +min, h = +hr;
+  if (isNaN(s) || isNaN(m) || isNaN(h)) return { ...def, freq: "custom" as BlastFreq };
+  if (dom === "*" && dow !== "*") { const x = +dow; if (!isNaN(x)) return { ...def, freq: "weekly", second: s, minute: m, hour: h, weekday: x }; }
+  if (dom !== "*" && dow === "*") { const x = +dom; if (!isNaN(x)) return { ...def, freq: "monthly", second: s, minute: m, hour: h, monthday: x }; }
+  if (dom === "*" && dow === "*") return { ...def, freq: "daily", second: s, minute: m, hour: h };
+  return { ...def, freq: "custom" as BlastFreq };
+}
+function buildBlastCron(s: { freq: BlastFreq; second: number; minute: number; hour: number; weekday: number; monthday: number; custom: string }) {
+  switch (s.freq) {
+    case "daily": return `${s.second} ${s.minute} ${s.hour} * * *`;
+    case "weekly": return `${s.second} ${s.minute} ${s.hour} * * ${s.weekday}`;
+    case "monthly": return `${s.second} ${s.minute} ${s.hour} ${s.monthday} * *`;
+    case "custom": return s.custom;
+  }
+}
+
+function BlastTab() {
+  const [enabled, setEnabled] = useState(false);
+  const [templateId, setTemplateId] = useState("0");
+  const [templates, setTemplates] = useState<{ id: number; name: string; subject: string }[]>([]);
+  const [nextRun, setNextRun] = useState("");
+  const [lastRunAt, setLastRunAt] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [recipientCount, setRecipientCount] = useState<number>(0);
+
+  const [freq, setFreq] = useState<BlastFreq>("daily");
+  const [second, setSecond] = useState(0);
+  const [minute, setMinute] = useState(0);
+  const [hour, setHour] = useState(8);
+  const [weekday, setWeekday] = useState(1);
+  const [monthday, setMonthday] = useState(1);
+  const [custom, setCustom] = useState("");
+
+  const cronExpr = useMemo(
+    () => buildBlastCron({ freq, second, minute, hour, weekday, monthday, custom }),
+    [freq, second, minute, hour, weekday, monthday, custom]
+  );
+
+  async function load() {
+    const [sch, tpls, users] = await Promise.all([
+      request<{ cronExpr: string; templateId: number; enabled: boolean; nextRun: string; lastRunAt: string }>("/api/admin/mail-blast/schedule"),
+      request<{ list: { id: number; name: string; subject: string }[] }>("/api/admin/mail-templates"),
+      request<{ list: { id: number; email: string; status: string }[] }>("/api/admin/users"),
+    ]);
+    setEnabled(sch.enabled);
+    setTemplateId(String(sch.templateId || 0));
+    setNextRun(sch.nextRun || "");
+    setLastRunAt(sch.lastRunAt || "");
+    setTemplates(tpls.list ?? []);
+    const recipients = (users.list ?? []).filter((u) => u.email && u.status === "active");
+    setRecipientCount(recipients.length);
+    const p = parseBlastCron(sch.cronExpr || "0 0 8 * * *");
+    setFreq(p.freq); setSecond(p.second); setMinute(p.minute); setHour(p.hour);
+    setWeekday(p.weekday); setMonthday(p.monthday); setCustom(p.custom);
+  }
+  useEffect(() => { load(); }, []);
+
+  async function save() {
+    if (enabled && Number(templateId) === 0) { toast.error("请先选择邮件模板"); return; }
+    setSaving(true);
+    try {
+      await request("/api/admin/mail-blast/schedule", {
+        method: "PUT",
+        body: JSON.stringify({ cronExpr, templateId: Number(templateId), enabled }),
+      });
+      await load();
+      toast.success("调度配置已保存");
+    } catch (e) {
+      toast.error("保存失败", { description: e instanceof Error ? e.message : "" });
+    } finally { setSaving(false); }
+  }
+
+  async function trigger() {
+    if (Number(templateId) === 0) { toast.error("请先选择邮件模板并保存"); return; }
+    setRunning(true);
+    try {
+      const res = await request<{ status: string; total: number; failCount: number }>("/api/admin/mail-blast/trigger", {
+        method: "POST",
+      });
+      toast.success(`群发完成：共 ${res.total} 封 / 失败 ${res.failCount} 封 / 状态 ${res.status}`);
+      await load();
+    } catch (e) {
+      toast.error("群发失败", { description: e instanceof Error ? e.message : "" });
+    } finally { setRunning(false); }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
+        <div className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-sm"><Mails className="h-4 w-4 text-primary" />全员定时群发</CardTitle>
+          {nextRun && (
+            <Badge variant="outline" className="text-[10px] gap-1">
+              <Clock className="h-3 w-3" />下次：{new Date(nextRun).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </Badge>
+          )}
+          {lastRunAt && (
+            <Badge variant="secondary" className="text-[10px]">
+              上次：{new Date(lastRunAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{enabled ? "已启用" : "已停用"}</span>
+          <Switch checked={enabled} onCheckedChange={setEnabled} />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          收件人：所有 status=active 且填写了邮箱的用户（去重）。当前匹配 <span className="text-foreground font-medium">{recipientCount}</span> 人。
+          发送方式：goroutine 并发（每次最多 6 个 SMTP 连接）；30 秒内同一调度不会重复触发。
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-xs">邮件模板</Label>
+          <Select value={templateId} onValueChange={setTemplateId}>
+            <SelectTrigger className="h-8"><SelectValue placeholder="选择模板" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">未选择</SelectItem>
+              {templates.map((t) => (
+                <SelectItem key={t.id} value={String(t.id)}>{t.name} —— {t.subject}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs">执行计划</Label>
+          <div className="flex flex-wrap gap-1">
+            {(["daily","weekly","monthly","custom"] as BlastFreq[]).map((v) => {
+              const lbl = { daily: "每天", weekly: "每周", monthly: "每月", custom: "自定义" } as const;
+              return (
+                <Button key={v} type="button" size="sm" variant={freq === v ? "default" : "outline"} className="text-xs h-7" disabled={!enabled} onClick={() => setFreq(v)}>
+                  {lbl[v]}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
+        {enabled && (freq === "daily" || freq === "weekly" || freq === "monthly") && (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {freq === "weekly" && (
+              <div className="space-y-1 sm:col-span-3">
+                <Label className="text-xs">星期</Label>
+                <Select value={String(weekday)} onValueChange={(v) => setWeekday(+v)}>
+                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                  <SelectContent>{WEEKDAY_LABEL.map((d, i) => <SelectItem key={i} value={String(i)}>{d}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
+            {freq === "monthly" && (
+              <div className="space-y-1 sm:col-span-3">
+                <Label className="text-xs">日期</Label>
+                <Input type="number" min={1} max={28} value={monthday} onChange={(e) => setMonthday(Math.min(28, Math.max(1, +e.target.value)))} className="h-8" />
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label className="text-xs">时</Label>
+              <Input type="number" min={0} max={23} value={hour} onChange={(e) => setHour(Math.min(23, Math.max(0, +e.target.value)))} className="h-8" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">分</Label>
+              <Input type="number" min={0} max={59} value={minute} onChange={(e) => setMinute(Math.min(59, Math.max(0, +e.target.value)))} className="h-8" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">秒</Label>
+              <Input type="number" min={0} max={59} value={second} onChange={(e) => setSecond(Math.min(59, Math.max(0, +e.target.value)))} className="h-8" />
+            </div>
+          </div>
+        )}
+
+        {enabled && freq === "custom" && (
+          <div className="space-y-1">
+            <Label className="text-xs">Cron 表达式（5 段或 6 段都支持，6 段第一位是秒）</Label>
+            <Input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="0 0 8 * * *" className="h-8 font-mono text-sm" />
+          </div>
+        )}
+
+        <div className="rounded-lg border bg-muted/30 px-3 py-2 flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">生成：</span>
+          <code className="text-xs font-mono font-medium bg-background border px-1.5 py-0.5 rounded">{cronExpr}</code>
+        </div>
+
+        <div className="flex gap-2">
+          <Button onClick={save} disabled={saving || !cronExpr} className="flex-1 gap-2" size="sm">
+            <Save className="h-3.5 w-3.5" />{saving ? "保存中…" : "保存调度配置"}
+          </Button>
+          <Button onClick={trigger} disabled={running} variant="outline" size="sm" className="gap-2">
+            <Send className={`h-3.5 w-3.5 ${running ? "animate-pulse" : ""}`} />
+            {running ? "发送中…" : "立即试发一次"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminEmail() {
   return (
     <div className="space-y-6">
@@ -1095,6 +1307,7 @@ export default function AdminEmail() {
           <TabsTrigger value="templates">邮件模板</TabsTrigger>
           <TabsTrigger value="groups">邮件组</TabsTrigger>
           <TabsTrigger value="schedules">发送调度</TabsTrigger>
+          <TabsTrigger value="blast">全员群发</TabsTrigger>
           <TabsTrigger value="logs">发送日志</TabsTrigger>
         </TabsList>
         <TabsContent value="smtp" className="mt-4">
@@ -1108,6 +1321,9 @@ export default function AdminEmail() {
         </TabsContent>
         <TabsContent value="schedules" className="mt-4">
           <SchedulesTab />
+        </TabsContent>
+        <TabsContent value="blast" className="mt-4">
+          <BlastTab />
         </TabsContent>
         <TabsContent value="logs" className="mt-4">
           <LogsTab />
