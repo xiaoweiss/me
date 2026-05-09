@@ -7,7 +7,7 @@ interface DayCellProps {
   mode: "occupancy" | "bookings";
   onClick: (date: string) => void;
   onCityEventClick?: (date: string) => void;
-  onCompetitorClick?: (date: string) => void;
+  onCompetitorClick?: (date: string, period: "AM" | "PM") => void;
   compact?: boolean;
   thresholds: ThresholdBand[];
   highlightPeriod: TimePeriod;
@@ -166,7 +166,7 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
                     type="button"
                     title="查看竞对活动明细"
                     className="w-full flex items-center justify-center gap-0.5 rounded px-0.5 py-1 hover:bg-chart-comp/10 active:bg-chart-comp/20 transition-colors cursor-pointer"
-                    onClick={(e) => { e.stopPropagation(); onCompetitorClick?.(day.date); }}
+                    onClick={(e) => { e.stopPropagation(); onCompetitorClick?.(day.date, p); }}
                   >
                     <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-chart-comp/20 text-chart-comp text-[8px] font-bold leading-none">C</span>
                     <CompareValue myVal={myVal} otherVal={compVal} label={`${compVal}%`} prefix="" />
@@ -191,7 +191,7 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
                     type="button"
                     title="查看竞对活动明细"
                     className="w-full flex items-center justify-center gap-0.5 rounded px-0.5 py-1 hover:bg-chart-comp/10 active:bg-chart-comp/20 transition-colors cursor-pointer"
-                    onClick={(e) => { e.stopPropagation(); onCompetitorClick?.(day.date); }}
+                    onClick={(e) => { e.stopPropagation(); onCompetitorClick?.(day.date, p); }}
                   >
                     <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-chart-comp/20 text-chart-comp text-[8px] font-bold leading-none">C</span>
                     <CompareValue myVal={myVal} otherVal={compVal} label={`${compVal}`} prefix="" />
