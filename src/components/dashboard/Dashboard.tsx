@@ -65,6 +65,7 @@ export function Dashboard() {
   const [cityEventOpen, setCityEventOpen] = useState(false);
   const [compDate, setCompDate] = useState<string | null>(null);
   const [compOpen, setCompOpen] = useState(false);
+  const [compPeriod, setCompPeriod] = useState<"AM" | "PM" | undefined>(undefined);
   const [venueBookingDate, setVenueBookingDate] = useState<string | null>(null);
   const [venueBookingOpen, setVenueBookingOpen] = useState(false);
   const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
@@ -172,8 +173,9 @@ export function Dashboard() {
     setCityEventOpen(true);
   };
 
-  const handleCompetitorClick = (date: string) => {
+  const handleCompetitorClick = (date: string, period?: "AM" | "PM") => {
     setCompDate(date);
+    setCompPeriod(period);
     setCompOpen(true);
   };
 
@@ -337,7 +339,7 @@ export function Dashboard() {
       </main>
 
       <CityEventDrawer date={cityEventDate} open={cityEventOpen} onClose={() => setCityEventOpen(false)} city={city} />
-      <CompetitorDrawer date={compDate} open={compOpen} onClose={() => setCompOpen(false)} hotelId={hotelId} />
+      <CompetitorDrawer date={compDate} open={compOpen} onClose={() => setCompOpen(false)} hotelId={hotelId} period={compPeriod} />
       <VenueBookingDrawer date={venueBookingDate} open={venueBookingOpen} onClose={() => setVenueBookingOpen(false)} hotelId={hotelId} />
       <DayDetailDrawer
         date={dayDetailDate}
