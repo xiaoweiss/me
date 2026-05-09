@@ -1,7 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Download, Image as ImageIcon, FileText } from "lucide-react";
 import { MonthYearSelector } from "./MonthYearSelector";
 import { FilterBar } from "./FilterBar";
 import { DayCell } from "./DayCell";
@@ -15,6 +18,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { DayData, Filters, ThresholdBand, MonthSummary } from "@/api/types";
 import { BarChart3, CalendarRange } from "lucide-react";
+
+const MONTH_NAMES = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
 
 const DAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
 
@@ -43,6 +48,8 @@ export function Dashboard() {
   const hotelIds = auth.status === "authenticated" ? auth.user.hotelIds ?? [] : [];
   const [selectedHotelId, setSelectedHotelId] = useState<number>(0);
   const hotelId = selectedHotelId || hotelIds[0] || 0;
+  const calendarRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState<"png" | "pdf" | null>(null);
   // 城市活动按当前选中酒店的所在城市过滤
   const city = hotels.find((h) => h.id === hotelId)?.city || "";
 
@@ -103,6 +110,62 @@ export function Dashboard() {
     setDayDetailDate(date);
     setDayDetailOpen(true);
   };
+
+  const currentHotelName = hotels.find((h) => h.id === hotelId)?.name || "本酒店";
+  const exportFilename = `${currentHotelName}-${MONTH_NAMES[month]}-${year}-${mode === "occupancy" ? "出租率" : "活动预订"}`;
+
+  // 把日历卡导出成 PNG / PDF。html-to-image 用 foreignObject 渲染，对 Tailwind / hsl() 兼容性好。
+  // 导出范围 = calendarRef 包住的 Card（含标题 + Legend + 日历网格），不包含工具栏。
+  async function handleExport(format: "png" | "pdf") {
+    const el = calendarRef.current;
+    if (!el) return;
+    setExporting(format);
+    try {
+      // 等字体加载完，否则截图里中文可能变方块
+      if (typeof document !== "undefined" && document.fonts && (document.fonts as unknown as { ready: Promise<unknown> }).ready) {
+        await (document.fonts as unknown as { ready: Promise<unknown> }).ready;
+      }
+      const { toPng } = await import("html-to-image");
+      const dataUrl = await toPng(el, {
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        cacheBust: true,
+      });
+
+      if (format === "png") {
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = `${exportFilename}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        toast.success("已下载 PNG");
+        return;
+      }
+
+      // PDF: 把 PNG 嵌进 jsPDF
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("图片加载失败"));
+      });
+      const { default: jsPDF } = await import("jspdf");
+      const pdf = new jsPDF({
+        orientation: img.width >= img.height ? "landscape" : "portrait",
+        unit: "px",
+        format: [img.width, img.height],
+        compress: true,
+      });
+      pdf.addImage(dataUrl, "PNG", 0, 0, img.width, img.height);
+      pdf.save(`${exportFilename}.pdf`);
+      toast.success("已下载 PDF");
+    } catch (e) {
+      toast.error("导出失败", { description: e instanceof Error ? e.message : "" });
+    } finally {
+      setExporting(null);
+    }
+  }
 
   const handleCityEventClick = (date: string) => {
     setCityEventDate(date);
@@ -174,16 +237,40 @@ export function Dashboard() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          <FilterBar
-            venueType={venueType}
-            onVenueTypeChange={setVenueType}
-            hotels={hotels}
-            selectedHotelId={selectedHotelId}
-            onHotelChange={setSelectedHotelId}
-          />
+          <div className="flex items-center gap-3">
+            <FilterBar
+              venueType={venueType}
+              onVenueTypeChange={setVenueType}
+              hotels={hotels}
+              selectedHotelId={selectedHotelId}
+              onHotelChange={setSelectedHotelId}
+            />
+            {/* 保存按钮：只 PC 显示。下拉选 PNG / PDF，截 calendarRef 包的 Card */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hidden sm:inline-flex gap-1.5 h-8"
+                  disabled={exporting !== null}
+                >
+                  <Download className={`h-3.5 w-3.5 ${exporting !== null ? "animate-pulse" : ""}`} />
+                  {exporting === "png" ? "导出 PNG…" : exporting === "pdf" ? "导出 PDF…" : "保存"}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[140px]">
+                <DropdownMenuItem onClick={() => handleExport("png")} className="gap-2">
+                  <ImageIcon className="h-3.5 w-3.5" />导出为 PNG 图片
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("pdf")} className="gap-2">
+                  <FileText className="h-3.5 w-3.5" />导出为 PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
-        <Card>
+        <Card ref={calendarRef}>
           <CardHeader className="pb-2 px-3 pt-3 sm:pb-3 sm:px-6 sm:pt-6">
             <CardTitle className="text-sm sm:text-base font-display">
               {mode === "occupancy" ? "月度出租率" : "活动预订"}
