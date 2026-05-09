@@ -1037,6 +1037,7 @@ const TEMPLATE_VARS = [
   { key: "{{.PM}}", desc: "下午出租率" },
   { key: "{{.CompRate}}", desc: "竞对均值" },
   { key: "{{.MarketRate}}", desc: "商圈均值" },
+  { key: "{{.DashboardImage}}", desc: "本月日历图(按对标酒店当天,需 PC「保存」过)" },
 ];
 
 const BUILTIN_TEMPLATES: Array<{ name: string; description: string; subject: string; body: string }> = [
@@ -1109,6 +1110,38 @@ const BUILTIN_TEMPLATES: Array<{ name: string; description: string; subject: str
       </tr>
     </table>
     <div style="font-size:11px;color:#9ca3af;margin-top:12px;">© STI Report · {{.Date}}</div>
+  </td></tr>
+</table>`,
+  },
+  {
+    name: "daily_report_with_image",
+    description: "带日历图的日报(图片由 PC 看板「保存」上传)",
+    subject: "【{{.HotelName}}】{{.Date}} 看板日报",
+    body: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f7fa;padding:24px 0;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif;color:#1f2937;">
+  <tr><td align="center">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;">
+      <tr>
+        <td style="padding:24px 28px;background:#1e3a8a;color:#ffffff;">
+          <div style="font-size:13px;letter-spacing:0.5px;opacity:0.85;">STI Report · 看板日报</div>
+          <div style="font-size:20px;font-weight:600;margin-top:4px;">{{.HotelName}} · {{.Date}}</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:20px 28px;text-align:center;">
+          <img src="{{.DashboardImage}}" alt="本月日历看板" style="max-width:100%;height:auto;border:1px solid #e5e7eb;border-radius:8px;" />
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 28px 20px 28px;font-size:13px;line-height:1.7;color:#4b5563;">
+          <p style="margin:0;">{{.UserName}} 您好,以上为 <strong>{{.HotelName}}</strong> 在 <strong>{{.Date}}</strong> 的看板截图。综合出租率 <strong style="color:#1e40af;">{{.OccupancyRate}}</strong>(竞对 {{.CompRate}} / 商圈 {{.MarketRate}})。</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:18px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;text-align:center;">
+          本邮件由会议室运营平台自动发送,图片由酒店对接人在 PC 端「保存」生成
+        </td>
+      </tr>
+    </table>
   </td></tr>
 </table>`,
   },
