@@ -11,11 +11,9 @@ import { DayCell } from "./DayCell";
 import { CityEventDrawer } from "./CityEventDrawer";
 import { CompetitorDrawer } from "./CompetitorDrawer";
 import { VenueBookingDrawer } from "./VenueBookingDrawer";
-import { DayDetailDrawer } from "./DayDetailDrawer";
 import { Legend } from "./Legend";
 import { fetchMonthData, fetchThresholds } from "@/api/dashboardApi";
 import { useAuth } from "@/contexts/AuthContext";
-import { useIsMobile } from "@/hooks/use-mobile";
 import type { DayData, Filters, ThresholdBand, MonthSummary } from "@/api/types";
 import { BarChart3, CalendarRange } from "lucide-react";
 
@@ -43,7 +41,6 @@ function formatDateCN(dateStr: string): string {
 
 export function Dashboard() {
   const { auth } = useAuth();
-  const isMobile = useIsMobile();
   const hotels = auth.status === "authenticated" ? auth.user.hotels ?? [] : [];
   const hotelIds = auth.status === "authenticated" ? auth.user.hotelIds ?? [] : [];
   const [selectedHotelId, setSelectedHotelId] = useState<number>(0);
@@ -68,8 +65,6 @@ export function Dashboard() {
   const [compPeriod, setCompPeriod] = useState<"AM" | "PM" | undefined>(undefined);
   const [venueBookingDate, setVenueBookingDate] = useState<string | null>(null);
   const [venueBookingOpen, setVenueBookingOpen] = useState(false);
-  const [dayDetailDate, setDayDetailDate] = useState<string | null>(null);
-  const [dayDetailOpen, setDayDetailOpen] = useState(false);
 
   useEffect(() => {
     if (hotelId) fetchThresholds(hotelId).then(setThresholds);
@@ -88,11 +83,9 @@ export function Dashboard() {
     loadData();
   }, [loadData]);
 
-  // 点击格子背景：
-  // - 活动预订模式：打开当天活动明细 drawer
-  // - 出租率模式（仅移动端）：有数据打开「日详情抽屉」，无数据 toast 提示
-  // - 出租率模式（桌面端）：保持原行为不动 —— 桌面格子里已经有 4 时段对比 + C/M 按钮，
-  //   要看竞对/城市活动直接点格子里对应的徽标即可，不需要再多一层抽屉
+  // 点击格子背景:
+  // - 活动预订模式: 打开当天活动明细 drawer
+  // - 出租率模式: 跟 PC 对齐 —— 格子内部已有上下午区/旗的独立 tap 区,空白格子只在无数据时给 toast 提示
   const handleDayClick = (date: string) => {
     if (mode === "bookings") {
       setVenueBookingDate(date);
@@ -102,14 +95,7 @@ export function Dashboard() {
     const d = days.find((x) => x.date === date);
     if (!d || !dayHasData(d)) {
       toast.info(`${formatDateCN(date)}暂无数据`);
-      return;
     }
-    if (!isMobile) {
-      // 桌面端不弹日详情抽屉；保留原行为（点格子背景不做事，靠格子内部按钮触达详情）
-      return;
-    }
-    setDayDetailDate(date);
-    setDayDetailOpen(true);
   };
 
   const currentHotelName = hotels.find((h) => h.id === hotelId)?.name || "本酒店";
@@ -341,16 +327,6 @@ export function Dashboard() {
       <CityEventDrawer date={cityEventDate} open={cityEventOpen} onClose={() => setCityEventOpen(false)} city={city} />
       <CompetitorDrawer date={compDate} open={compOpen} onClose={() => setCompOpen(false)} hotelId={hotelId} period={compPeriod} />
       <VenueBookingDrawer date={venueBookingDate} open={venueBookingOpen} onClose={() => setVenueBookingOpen(false)} hotelId={hotelId} />
-      <DayDetailDrawer
-        date={dayDetailDate}
-        day={dayDetailDate ? days.find((d) => d.date === dayDetailDate) ?? null : null}
-        open={dayDetailOpen}
-        onClose={() => setDayDetailOpen(false)}
-        thresholds={thresholds}
-        mode={mode}
-        hotelId={hotelId}
-        city={city}
-      />
     </div>
   );
 }
