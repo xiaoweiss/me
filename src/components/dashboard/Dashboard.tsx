@@ -13,6 +13,7 @@ import { CompetitorDrawer } from "./CompetitorDrawer";
 import { VenueBookingDrawer } from "./VenueBookingDrawer";
 import { Legend } from "./Legend";
 import { fetchMonthData, fetchThresholds } from "@/api/dashboardApi";
+import { getToken } from "@/api/client";
 import { useAuth } from "@/contexts/AuthContext";
 import type { DayData, Filters, ThresholdBand, MonthSummary } from "@/api/types";
 import { BarChart3, CalendarRange } from "lucide-react";
@@ -101,6 +102,36 @@ export function Dashboard() {
   const currentHotelName = hotels.find((h) => h.id === hotelId)?.name || "本酒店";
   const exportFilename = `${currentHotelName}-${MONTH_NAMES[month]}-${year}-${mode === "occupancy" ? "出租率" : "活动预订"}`;
 
+  // 当日 ISO 日期(Asia/Shanghai),不论用户在看哪个历史月份。
+  // 服务器留存的"今日看板图"必须是真正的今天,不是 selected month/year。
+  function todayISOInShanghai(): string {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric", month: "2-digit", day: "2-digit",
+    });
+    return fmt.format(new Date()); // YYYY-MM-DD
+  }
+
+  // 上传文件到服务器留存(失败不阻塞本地下载)。
+  async function uploadSnapshotToServer(blob: Blob, format: "png" | "pdf") {
+    const fd = new FormData();
+    fd.append("file", blob, `${exportFilename}.${format}`);
+    fd.append("hotelId", String(hotelId));
+    fd.append("date", todayISOInShanghai());
+    fd.append("mode", mode);
+    fd.append("format", format);
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const apiBase = import.meta.env.DEV ? "" : (import.meta.env.VITE_API_BASE_URL as string || "");
+    const res = await fetch(`${apiBase}/api/admin/dashboard-snapshots`, {
+      method: "POST",
+      headers,
+      body: fd,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+  }
+
   // 把日历卡导出成 PNG / PDF。html-to-image 用 foreignObject 渲染，对 Tailwind / hsl() 兼容性好。
   // 导出范围 = calendarRef 包住的 Card（含标题 + Legend + 日历网格），不包含工具栏。
   async function handleExport(format: "png" | "pdf") {
@@ -119,7 +150,19 @@ export function Dashboard() {
         cacheBust: true,
       });
 
+      // dataURL → Blob,后续既本地下载也上传服务器
+      const blobResp = await fetch(dataUrl);
+      const pngBlob = await blobResp.blob();
+
       if (format === "png") {
+        // 先尝试上传服务器留存,失败时仅 toast 不阻塞下载
+        try {
+          await uploadSnapshotToServer(pngBlob, "png");
+        } catch (e) {
+          toast.error("服务器留存失败,本地下载已完成", {
+            description: e instanceof Error ? e.message : "",
+          });
+        }
         const a = document.createElement("a");
         a.href = dataUrl;
         a.download = `${exportFilename}.png`;
@@ -145,6 +188,15 @@ export function Dashboard() {
         compress: true,
       });
       pdf.addImage(dataUrl, "PNG", 0, 0, img.width, img.height);
+      // 上传 PDF 二进制(模板第一版只用 PNG inline,但 PDF 也留存便于后续)
+      try {
+        const pdfBlob = pdf.output("blob");
+        await uploadSnapshotToServer(pdfBlob, "pdf");
+      } catch (e) {
+        toast.error("服务器留存失败,本地下载已完成", {
+          description: e instanceof Error ? e.message : "",
+        });
+      }
       pdf.save(`${exportFilename}.pdf`);
       toast.success("已下载 PDF");
     } catch (e) {
