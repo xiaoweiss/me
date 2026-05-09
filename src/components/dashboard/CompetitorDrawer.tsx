@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Badge } from "@/components/ui/badge";
 import { fetchCompetitorDetail } from "@/api/dashboardApi";
-import type { CompetitorDetail } from "@/api/types";
+import type { CompetitorDetail, TimePeriod } from "@/api/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Building2, Clock, ChevronDown } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -13,6 +13,9 @@ interface CompetitorDrawerProps {
   open: boolean;
   onClose: () => void;
   hotelId: number;
+  // 可选 period 过滤：若传 "AM"/"PM"，前端按 activity.period 过滤
+  // count 跟着重算，count===0 的酒店整条隐藏；undefined 不过滤
+  period?: TimePeriod;
 }
 
 const PERIOD_LABEL: Record<string, string> = { AM: "上午", PM: "下午", EV: "晚上" };
@@ -58,7 +61,7 @@ function CompetitorContent({ competitors, loading }: { competitors: CompetitorDe
   );
 }
 
-export function CompetitorDrawer({ date, open, onClose, hotelId }: CompetitorDrawerProps) {
+export function CompetitorDrawer({ date, open, onClose, hotelId, period }: CompetitorDrawerProps) {
   const [competitors, setCompetitors] = useState<CompetitorDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
@@ -72,14 +75,24 @@ export function CompetitorDrawer({ date, open, onClose, hotelId }: CompetitorDra
     });
   }, [date, hotelId]);
 
+  // period 过滤（client-side）：activities 按 period 过滤，count 重算，空酒店剔除
+  const filtered = period && (period === "AM" || period === "PM")
+    ? competitors
+        .map((c) => ({ ...c, activities: (c.activities ?? []).filter((a) => a.period === period) }))
+        .map((c) => ({ ...c, count: c.activities.length }))
+        .filter((c) => c.count > 0)
+    : competitors;
+
   const formattedDate = date
     ? new Date(date + "T00:00:00").toLocaleDateString("zh-CN", { month: "long", day: "numeric" })
     : "";
 
+  const periodSuffix = period && PERIOD_LABEL[period] ? ` · ${PERIOD_LABEL[period]}` : "";
+
   const titleContent = (
     <span className="flex items-center gap-2 font-display">
       <Building2 className="h-5 w-5 text-primary" />
-      {formattedDate} · 竞对酒店群明细
+      {formattedDate} · 竞对酒店群明细{periodSuffix}
     </span>
   );
 
@@ -91,7 +104,7 @@ export function CompetitorDrawer({ date, open, onClose, hotelId }: CompetitorDra
             <DrawerTitle>{titleContent}</DrawerTitle>
           </DrawerHeader>
           <div className="overflow-y-auto px-4 pb-6">
-            <CompetitorContent competitors={competitors} loading={loading} />
+            <CompetitorContent competitors={filtered} loading={loading} />
           </div>
         </DrawerContent>
       </Drawer>
@@ -105,7 +118,7 @@ export function CompetitorDrawer({ date, open, onClose, hotelId }: CompetitorDra
           <SheetTitle>{titleContent}</SheetTitle>
         </SheetHeader>
         <div className="mt-6">
-          <CompetitorContent competitors={competitors} loading={loading} />
+          <CompetitorContent competitors={filtered} loading={loading} />
         </div>
       </SheetContent>
     </Sheet>
