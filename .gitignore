@@ -31,3 +31,4 @@ dist-ssr
 # Claude
 .claude/
 .claude-memory
+.superpowers/
