@@ -46,9 +46,135 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
   const periodValues = mode === "occupancy" ? day.periodOccupancy : day.periodBookings;
 
   if (compact) {
-    // 移动端格子：宏观一眼看综合数字 + 上下午表现，按时段 / 按对手对比挪到详情抽屉看
     const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-    const overallVal = mode === "occupancy" ? day.myHotelRate : day.newBookingCount;
+
+    // 顶部日期 + 旗(两种 mode 共用)
+    const topRow = (
+      <div className="flex items-center justify-between px-1 pt-0.5 min-h-[14px]">
+        <span className={cn(
+          "text-[10px] leading-none",
+          isWeekend ? "text-primary font-semibold" : "text-muted-foreground font-medium",
+        )}>
+          {dayNum}
+        </span>
+        {day.cityEventCount > 0 && (
+          <button
+            type="button"
+            title={`${day.cityEventCount} 项城市活动`}
+            className="inline-flex items-center gap-0.5 rounded-full px-0.5 py-px text-red-500 active:bg-red-100 transition-colors"
+            onClick={(e) => { e.stopPropagation(); onCityEventClick?.(day.date); }}
+          >
+            <Flag className="h-2.5 w-2.5 fill-current" />
+            {day.cityEventCount > 1 && (
+              <span className="text-[8px] font-bold leading-none">{day.cityEventCount}</span>
+            )}
+          </button>
+        )}
+      </div>
+    );
+
+    if (mode === "occupancy") {
+      // === v6 双柱布局: M/A 双柱 + 柱顶本店 % + 2x2 vs C / vs M 方向矩阵 ===
+      const amVal = day.periodOccupancy.AM;
+      const pmVal = day.periodOccupancy.PM;
+      const amColor = getThresholdColor(amVal, thresholds);
+      const pmColor = getThresholdColor(pmVal, thresholds);
+
+      const cmpDir = (my: number, other: number): "win" | "lose" | "tie" =>
+        my > other ? "win" : my < other ? "lose" : "tie";
+
+      const amVsC = cmpDir(amVal, day.competitorPeriodOccupancy.AM);
+      const amVsM = cmpDir(amVal, day.marketPeriodOccupancy.AM);
+      const pmVsC = cmpDir(pmVal, day.competitorPeriodOccupancy.PM);
+      const pmVsM = cmpDir(pmVal, day.marketPeriodOccupancy.PM);
+
+      const arrowChar = (d: "win" | "lose" | "tie") => d === "win" ? "▲" : d === "lose" ? "▼" : "─";
+      const arrowColor = (d: "win" | "lose" | "tie") =>
+        d === "win" ? "hsl(140, 65%, 32%)" :
+        d === "lose" ? "hsl(0, 75%, 48%)" :
+        "#9ca3af";
+
+      const amDim = highlightPeriod !== "All" && highlightPeriod !== "AM";
+      const pmDim = highlightPeriod !== "All" && highlightPeriod !== "PM";
+
+      // 单列 = 数字 + 柱 + M/A 标签;按列整体 dim
+      const renderColumn = (
+        val: number, color: string, lbl: string, dim: boolean,
+      ) => (
+        <div className={cn("flex-1 flex flex-col items-stretch min-w-0", dim && "opacity-30")}>
+          <div
+            className="text-[9px] font-extrabold leading-none text-center"
+            style={{ color: `hsl(${color})` }}
+          >
+            {val}%
+          </div>
+          <div className="flex-1 flex items-end pt-1">
+            <div
+              className="w-full rounded-sm"
+              style={{
+                height: `${Math.max(val, 0)}%`,
+                minHeight: "4px",
+                backgroundColor: `hsl(${color} / 0.8)`,
+              }}
+            />
+          </div>
+          <div className="text-[7px] font-extrabold leading-none text-center text-muted-foreground pt-0.5">
+            {lbl}
+          </div>
+        </div>
+      );
+
+      return (
+        <div
+          className="relative flex flex-col rounded-md overflow-hidden border border-border/50 bg-card cursor-pointer"
+          style={{ minHeight: "100px" }}
+          onClick={() => onClick(day.date)}
+        >
+          {topRow}
+
+          {/* 中部: M / A 双柱(数字 + 柱身 + 标签) */}
+          <div className="flex-1 flex px-1.5 pb-0.5 gap-1 min-h-0">
+            {renderColumn(amVal, amColor, "M", amDim)}
+            {renderColumn(pmVal, pmColor, "A", pmDim)}
+          </div>
+
+          {/* 底部: 行标 C/M + 上午区/下午区 两个按钮 */}
+          <div className="flex pb-1 px-1 gap-1 items-stretch">
+            <div className="flex flex-col gap-0.5 justify-around py-0.5">
+              <span className="text-[7px] font-bold leading-none text-muted-foreground">C</span>
+              <span className="text-[7px] font-bold leading-none text-muted-foreground">M</span>
+            </div>
+            <button
+              type="button"
+              title="上午对比明细"
+              className={cn(
+                "flex-1 flex flex-col gap-0.5 py-0.5 rounded items-center justify-around transition-colors active:bg-accent/60",
+                amDim && "opacity-30",
+              )}
+              onClick={(e) => { e.stopPropagation(); onCompetitorClick?.(day.date, "AM"); }}
+            >
+              <span className="text-[10px] font-extrabold leading-none" style={{ color: arrowColor(amVsC) }}>{arrowChar(amVsC)}</span>
+              <span className="text-[10px] font-extrabold leading-none" style={{ color: arrowColor(amVsM) }}>{arrowChar(amVsM)}</span>
+            </button>
+            <button
+              type="button"
+              title="下午对比明细"
+              className={cn(
+                "flex-1 flex flex-col gap-0.5 py-0.5 rounded items-center justify-around transition-colors active:bg-accent/60",
+                pmDim && "opacity-30",
+              )}
+              onClick={(e) => { e.stopPropagation(); onCompetitorClick?.(day.date, "PM"); }}
+            >
+              <span className="text-[10px] font-extrabold leading-none" style={{ color: arrowColor(pmVsC) }}>{arrowChar(pmVsC)}</span>
+              <span className="text-[10px] font-extrabold leading-none" style={{ color: arrowColor(pmVsM) }}>{arrowChar(pmVsM)}</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // === bookings mode: 保持简版(综合数字大字 + 上下午色点),整格 tap → VenueBookingDrawer ===
+    const overallVal = day.newBookingCount;
     const overallColor = getThresholdColor(overallVal, thresholds);
 
     return (
@@ -57,40 +183,15 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
         style={{ backgroundColor: `hsl(${overallColor} / 0.18)`, minHeight: "80px" }}
         onClick={() => onClick(day.date)}
       >
-        {/* 顶部：日期 + 城市活动旗 */}
-        <div className="flex items-center justify-between px-1 pt-0.5 min-h-[14px]">
-          <span className={cn(
-            "text-[10px] leading-none",
-            isWeekend ? "text-primary font-semibold" : "text-muted-foreground font-medium",
-          )}>
-            {dayNum}
-          </span>
-          {day.cityEventCount > 0 && (
-            <button
-              type="button"
-              title={`${day.cityEventCount} 项城市活动`}
-              className="inline-flex items-center gap-0.5 rounded-full px-0.5 py-px text-red-500 active:bg-red-100 transition-colors"
-              onClick={(e) => { e.stopPropagation(); onCityEventClick?.(day.date); }}
-            >
-              <Flag className="h-2.5 w-2.5 fill-current" />
-              {day.cityEventCount > 1 && (
-                <span className="text-[8px] font-bold leading-none">{day.cityEventCount}</span>
-              )}
-            </button>
-          )}
-        </div>
-
-        {/* 中部：综合数字大字，居中 */}
+        {topRow}
         <div className="flex-1 flex items-center justify-center">
           <span
             className="text-xl font-bold font-display leading-none"
             style={{ color: `hsl(${overallColor})` }}
           >
-            {mode === "occupancy" ? `${overallVal}%` : overallVal}
+            {overallVal}
           </span>
         </div>
-
-        {/* 底部：上午 / 下午 mini 色点 */}
         <div className="flex justify-center items-center gap-2 pb-1">
           {PERIODS.map((p) => {
             const v = periodValues[p];
