@@ -1046,7 +1046,8 @@ const TEMPLATE_VARS = [
   { key: "{{.PM}}", desc: "下午出租率" },
   { key: "{{.CompRate}}", desc: "竞对均值" },
   { key: "{{.MarketRate}}", desc: "商圈均值" },
-  { key: "{{.DashboardImage}}", desc: "本月日历图(按对标酒店当天,需 PC「保存」过)" },
+  { key: "{{.DashboardImage}}", desc: "本月日历图(PNG, 嵌入正文; 用 <img src=\"{{.DashboardImage}}\">)" },
+  { key: "{{.DashboardPDF}}", desc: "本月日历 PDF(当附件发, 模板里写一句即触发,文本展开为空)" },
 ];
 
 const BUILTIN_TEMPLATES: Array<{ name: string; description: string; subject: string; body: string }> = [
