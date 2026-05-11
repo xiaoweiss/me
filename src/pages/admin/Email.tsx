@@ -1179,28 +1179,56 @@ function TemplatesTab() {
     }
   }
 
-  async function uploadAttachment(file: File) {
-    if (!editId) {
-      toast.error("请先保存模板后再上传附件");
-      return;
+  // 给新建模板自动 silent-save 拿到 id;返回 templateId 或 null
+  async function ensureTemplateId(): Promise<number | null> {
+    if (editId) return editId;
+    if (!formName.trim()) {
+      toast.error("请先填写「模板标识」");
+      return null;
     }
+    if (!formSubject.trim()) {
+      toast.error("请先填写「邮件主题」");
+      return null;
+    }
+    try {
+      const body = { name: formName, subject: formSubject, body: formBody, description: formDesc };
+      await request("/api/admin/mail-templates", { method: "POST", body: JSON.stringify(body) });
+      const resp = await request<{ list: MailTemplate[] }>("/api/admin/mail-templates");
+      const created = (resp.list ?? []).find((t) => t.name === formName);
+      if (!created) {
+        toast.error("自动保存模板失败,请手动点保存后再上传");
+        return null;
+      }
+      setEditId(created.id);
+      setAttachments([]);
+      load(); // 刷新外层列表
+      return created.id;
+    } catch (err) {
+      toast.error(err instanceof Error ? `保存模板失败: ${err.message}` : "保存模板失败");
+      return null;
+    }
+  }
+
+  async function uploadAttachment(file: File) {
     if (file.size > 20 * 1024 * 1024) {
       toast.error(`${file.name} 超过 20MB 上限`);
       return;
     }
     setUploadingAtt(true);
     try {
+      const tplId = await ensureTemplateId();
+      if (!tplId) return;
       const fd = new FormData();
       fd.append("file", file);
       const token = localStorage.getItem("auth_token");
       const apiBase = import.meta.env.DEV ? "" : (import.meta.env.VITE_API_BASE_URL as string || "");
-      const res = await fetch(`${apiBase}/api/admin/mail-templates/${editId}/attachments`, {
+      const res = await fetch(`${apiBase}/api/admin/mail-templates/${tplId}/attachments`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd,
       });
       if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
-      await loadAttachments(editId);
+      await loadAttachments(tplId);
       toast.success(`已上传 ${file.name}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "上传失败");
@@ -1282,23 +1310,13 @@ function TemplatesTab() {
     try {
       const body = { name: formName, subject: formSubject, body: formBody, description: formDesc };
       if (editId) {
+        // 已存在(可能是初次上传附件时 silent-save 进的) → PUT 更新所有字段
         await request(`/api/admin/mail-templates/${editId}`, { method: "PUT", body: JSON.stringify(body) });
-        toast.success("模板已保存");
-        setDialogOpen(false);
       } else {
-        // 新建后保留 dialog 打开,让用户可以上传附件;拉回新 id
         await request("/api/admin/mail-templates", { method: "POST", body: JSON.stringify(body) });
-        const resp = await request<{ list: MailTemplate[] }>("/api/admin/mail-templates");
-        const created = (resp.list ?? []).find((t) => t.name === formName);
-        if (created) {
-          setEditId(created.id);
-          setAttachments([]);
-          toast.success("模板已创建,可在下方上传附件");
-        } else {
-          toast.success("模板已保存");
-          setDialogOpen(false);
-        }
       }
+      setDialogOpen(false);
+      toast.success("模板已保存");
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "保存失败");
@@ -1468,7 +1486,7 @@ function TemplatesTab() {
                     size="sm"
                     variant="outline"
                     className="gap-1 h-7 text-xs"
-                    disabled={!editId || uploadingAtt}
+                    disabled={uploadingAtt}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <Upload className="h-3 w-3" />
@@ -1476,10 +1494,13 @@ function TemplatesTab() {
                   </Button>
                 </div>
               </div>
-              {!editId ? (
-                <p className="text-xs text-muted-foreground italic">先点「保存」创建模板,才能上传附件</p>
-              ) : attachments.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">暂无附件。上传后:图片可在 HTML 里用 <code className="px-1 bg-muted rounded">cid:文件名</code> 引用;不引用就当附件挂着</p>
+              {attachments.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  {editId
+                    ? "暂无附件。上传后:图片可在 HTML 里用 "
+                    : "暂无附件。点上传时会自动保存模板,然后上传文件;图片可在 HTML 里用 "}
+                  <code className="px-1 bg-muted rounded">cid:文件名</code> 引用;不引用就当附件挂着
+                </p>
               ) : (
                 <div className="space-y-1 rounded-md border p-2 bg-card">
                   {attachments.map((a) => (
