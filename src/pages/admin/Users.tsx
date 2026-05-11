@@ -9,7 +9,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, Plus, Mail, Phone, Star } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+import { Building2, Plus, Mail, Phone, Star, ChevronsUpDown, Check, X } from "lucide-react";
 import { toast } from "sonner";
 
 interface AdminUser {
@@ -45,6 +48,10 @@ export default function AdminUsers() {
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 「所属酒店」列筛选: -1=全部, 0=未设置, >0=某具体酒店 id
+  const [filterPrimaryHotelId, setFilterPrimaryHotelId] = useState<number>(-1);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const [hotelDialogOpen, setHotelDialogOpen] = useState(false);
   const [editUserId, setEditUserId] = useState<number | null>(null);
@@ -239,12 +246,64 @@ export default function AdminUsers() {
   const hotelName = (id: number) => hotels.find((h) => h.id === id)?.name ?? `#${id}`;
   const editUserName = users.find((u) => u.id === editUserId)?.name ?? "";
 
+  // 按「所属酒店」筛选
+  const filteredUsers = filterPrimaryHotelId === -1
+    ? users
+    : users.filter((u) => (u.primaryHotelId ?? 0) === filterPrimaryHotelId);
+
+  const filterLabel =
+    filterPrimaryHotelId === -1 ? "全部" :
+    filterPrimaryHotelId === 0 ? "未设置" :
+    hotels.find((h) => h.id === filterPrimaryHotelId)?.name ?? "未知酒店";
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-2xl font-bold font-display">用户管理</h2>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline">{users.length} 个用户</Badge>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground shrink-0">按所属酒店筛选</span>
+          <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 justify-between gap-1 text-xs min-w-[140px] max-w-[220px]">
+                <span className="truncate">{filterLabel}</span>
+                <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[260px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="搜索酒店..." className="h-9" />
+                <CommandList>
+                  <CommandEmpty>未找到酒店</CommandEmpty>
+                  <CommandGroup>
+                    <CommandItem value="__all__全部" onSelect={() => { setFilterPrimaryHotelId(-1); setFilterOpen(false); }}>
+                      <Check className={cn("mr-2 h-4 w-4", filterPrimaryHotelId === -1 ? "opacity-100" : "opacity-0")} />
+                      全部
+                    </CommandItem>
+                    <CommandItem value="__none__未设置" onSelect={() => { setFilterPrimaryHotelId(0); setFilterOpen(false); }}>
+                      <Check className={cn("mr-2 h-4 w-4", filterPrimaryHotelId === 0 ? "opacity-100" : "opacity-0")} />
+                      未设置
+                    </CommandItem>
+                    {hotels.map((h) => (
+                      <CommandItem key={h.id} value={h.name} onSelect={() => { setFilterPrimaryHotelId(h.id); setFilterOpen(false); }}>
+                        <Check className={cn("mr-2 h-4 w-4", filterPrimaryHotelId === h.id ? "opacity-100" : "opacity-0")} />
+                        {h.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          {filterPrimaryHotelId !== -1 && (
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-xs gap-1" onClick={() => setFilterPrimaryHotelId(-1)}>
+              <X className="h-3 w-3" /> 清除
+            </Button>
+          )}
+          <Badge variant="outline">
+            {filterPrimaryHotelId === -1
+              ? `${users.length} 个用户`
+              : `${filteredUsers.length}/${users.length} 个用户`}
+          </Badge>
           <Button size="sm" className="gap-1" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5" /> 创建管理员
           </Button>
@@ -271,7 +330,9 @@ export default function AdminUsers() {
                 <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">加载中...</TableCell></TableRow>
               ) : users.length === 0 ? (
                 <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">暂无用户</TableCell></TableRow>
-              ) : users.map((u) => {
+              ) : filteredUsers.length === 0 ? (
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">「{filterLabel}」没有匹配的用户</TableCell></TableRow>
+              ) : filteredUsers.map((u) => {
                 const s = STATUS_MAP[u.status] ?? { label: u.status, variant: "secondary" as const };
                 return (
                   <TableRow key={u.id}>
