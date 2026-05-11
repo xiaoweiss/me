@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { request } from "@/api/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, ChevronDown, ChevronUp, RotateCcw, Eye, Save, Send, FileText, Clock, Mails } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, RotateCcw, Eye, Save, Send, FileText, Clock, Mails, Paperclip, Upload, Copy } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 
@@ -1029,6 +1029,15 @@ interface MailTemplate {
   description: string;
 }
 
+interface TemplateAttachment {
+  id: number;
+  originalName: string;
+  cid: string;
+  size: number;
+  mimeType: string;
+  sortOrder: number;
+}
+
 const TEMPLATE_VARS = [
   { key: "{{.HotelName}}", desc: "酒店名称" },
   { key: "{{.Date}}", desc: "日期" },
@@ -1157,6 +1166,73 @@ function TemplatesTab() {
   const [formBody, setFormBody] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [saving, setSaving] = useState(false);
+  const [attachments, setAttachments] = useState<TemplateAttachment[]>([]);
+  const [uploadingAtt, setUploadingAtt] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function loadAttachments(tplId: number) {
+    try {
+      const resp = await request<{ list: TemplateAttachment[] }>(`/api/admin/mail-templates/${tplId}/attachments`);
+      setAttachments(resp.list ?? []);
+    } catch {
+      setAttachments([]);
+    }
+  }
+
+  async function uploadAttachment(file: File) {
+    if (!editId) {
+      toast.error("请先保存模板后再上传附件");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error(`${file.name} 超过 20MB 上限`);
+      return;
+    }
+    setUploadingAtt(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const token = localStorage.getItem("auth_token");
+      const apiBase = import.meta.env.DEV ? "" : (import.meta.env.VITE_API_BASE_URL as string || "");
+      const res = await fetch(`${apiBase}/api/admin/mail-templates/${editId}/attachments`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+      await loadAttachments(editId);
+      toast.success(`已上传 ${file.name}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "上传失败");
+    } finally {
+      setUploadingAtt(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function deleteAttachment(attId: number, name: string) {
+    if (!editId) return;
+    if (!confirm(`确认删除附件「${name}」?`)) return;
+    try {
+      await request(`/api/admin/mail-templates/${editId}/attachments/${attId}`, { method: "DELETE" });
+      await loadAttachments(editId);
+      toast.success("已删除");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "删除失败");
+    }
+  }
+
+  function copyCid(cid: string) {
+    const ref = `cid:${cid}`;
+    navigator.clipboard.writeText(ref);
+    toast.success(`已复制 ${ref}`);
+  }
+
+  function formatBytes(n: number): string {
+    if (n < 1024) return `${n}B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
+    return `${(n / 1024 / 1024).toFixed(1)}MB`;
+  }
 
   async function load() {
     setLoading(true);
@@ -1176,6 +1252,7 @@ function TemplatesTab() {
     setFormSubject("");
     setFormBody("");
     setFormDesc("");
+    setAttachments([]);
     setDialogOpen(true);
   }
 
@@ -1185,6 +1262,7 @@ function TemplatesTab() {
     setFormDesc(t.description);
     setFormSubject(t.subject);
     setFormBody(t.body);
+    setAttachments([]);
     setDialogOpen(true);
   }
 
@@ -1194,6 +1272,8 @@ function TemplatesTab() {
     setFormSubject(t.subject);
     setFormBody(t.body);
     setFormDesc(t.description);
+    setAttachments([]);
+    loadAttachments(t.id);
     setDialogOpen(true);
   }
 
@@ -1203,11 +1283,22 @@ function TemplatesTab() {
       const body = { name: formName, subject: formSubject, body: formBody, description: formDesc };
       if (editId) {
         await request(`/api/admin/mail-templates/${editId}`, { method: "PUT", body: JSON.stringify(body) });
+        toast.success("模板已保存");
+        setDialogOpen(false);
       } else {
+        // 新建后保留 dialog 打开,让用户可以上传附件;拉回新 id
         await request("/api/admin/mail-templates", { method: "POST", body: JSON.stringify(body) });
+        const resp = await request<{ list: MailTemplate[] }>("/api/admin/mail-templates");
+        const created = (resp.list ?? []).find((t) => t.name === formName);
+        if (created) {
+          setEditId(created.id);
+          setAttachments([]);
+          toast.success("模板已创建,可在下方上传附件");
+        } else {
+          toast.success("模板已保存");
+          setDialogOpen(false);
+        }
       }
-      setDialogOpen(false);
-      toast.success("模板已保存");
       load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "保存失败");
@@ -1360,6 +1451,61 @@ function TemplatesTab() {
                 placeholder="<h2>{{.HotelName}} 运营日报</h2>..."
               />
             </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-1">
+                  <Paperclip className="h-3.5 w-3.5" /> 附件(图片 / PDF, 单文件 ≤ 20MB,总和 ≤ 50MB)
+                </Label>
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAttachment(f); }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 h-7 text-xs"
+                    disabled={!editId || uploadingAtt}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-3 w-3" />
+                    {uploadingAtt ? "上传中..." : "上传文件"}
+                  </Button>
+                </div>
+              </div>
+              {!editId ? (
+                <p className="text-xs text-muted-foreground italic">先点「保存」创建模板,才能上传附件</p>
+              ) : attachments.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">暂无附件。上传后:图片可在 HTML 里用 <code className="px-1 bg-muted rounded">cid:文件名</code> 引用;不引用就当附件挂着</p>
+              ) : (
+                <div className="space-y-1 rounded-md border p-2 bg-card">
+                  {attachments.map((a) => (
+                    <div key={a.id} className="flex items-center gap-2 text-xs py-1">
+                      <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="truncate flex-1 min-w-0" title={a.originalName}>{a.originalName}</span>
+                      <span className="text-muted-foreground shrink-0 tabular-nums">{formatBytes(a.size)}</span>
+                      <code
+                        className="px-1 bg-muted rounded font-mono cursor-pointer hover:bg-muted-foreground/10 shrink-0"
+                        title="点击复制"
+                        onClick={() => copyCid(a.cid)}
+                      >
+                        cid:{a.cid}
+                      </code>
+                      <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => copyCid(a.cid)} title="复制 cid 引用">
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                      <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => deleteAttachment(a.id, a.originalName)} title="删除附件">
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="rounded-md bg-muted p-3">
               <p className="text-xs font-medium mb-2">可用变量：</p>
               <div className="flex flex-wrap gap-2">
