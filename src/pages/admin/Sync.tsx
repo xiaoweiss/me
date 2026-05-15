@@ -54,13 +54,44 @@ interface NotificationSetting {
 type FreqType = "daily" | "weekly" | "monthly" | "interval" | "intervalSec" | "custom";
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
+function WeekdayMultiSelect({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
+  const has = (i: number) => value.includes(i);
+  const toggle = (i: number) => {
+    if (has(i)) {
+      const next = value.filter((x) => x !== i);
+      // 至少留一天,防止生成 "* * * * *" 全空
+      if (next.length === 0) return;
+      onChange(next);
+    } else {
+      onChange([...value, i].sort((a, b) => a - b));
+    }
+  };
+  return (
+    <div className="flex flex-wrap gap-1">
+      {WEEKDAYS.map((d, i) => (
+        <Button
+          key={i}
+          type="button"
+          size="sm"
+          variant={has(i) ? "default" : "outline"}
+          className="text-xs h-7 px-2.5"
+          onClick={() => toggle(i)}
+        >
+          {d}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
 // 后端 cron 已升级到 6 字段（秒 分 时 日 月 周），同时兼容老的 5 字段（自动补秒为 0）。
-// 解析时把 5 字段也按 second=0 处理。
+// 解析时把 5 字段也按 second=0 处理。weekday 支持多选: cron 里写 "1,3,5" 表示周一/三/五。
 function parseCronToState(cron: string) {
   const d = {
     freq: "daily" as FreqType,
     second: 0, hour: 6, minute: 0,
-    weekday: 1, monthday: 1,
+    weekdays: [1] as number[], // 支持多选,有序去重
+    monthday: 1,
     intervalMin: 30, intervalSec: 30,
     custom: cron,
   };
@@ -86,16 +117,27 @@ function parseCronToState(cron: string) {
 
   const s = parseInt(sec), m = parseInt(min), h = parseInt(hr);
   if (isNaN(s) || isNaN(m) || isNaN(h)) return { ...d, freq: "custom" as FreqType };
-  if (dom === "*" && dow !== "*") { const x = parseInt(dow); if (!isNaN(x)) return { ...d, freq: "weekly" as FreqType, second: s, hour: h, minute: m, weekday: x } }
+  if (dom === "*" && dow !== "*") {
+    // weekly: 解析 "1" / "1,3,5" / "MON,WED"
+    const days = dow.split(",").map((x) => {
+      const n = parseInt(x.trim());
+      return isNaN(n) ? -1 : n;
+    }).filter((n) => n >= 0 && n <= 6);
+    const unique = Array.from(new Set(days)).sort((a, b) => a - b);
+    if (unique.length > 0) return { ...d, freq: "weekly" as FreqType, second: s, hour: h, minute: m, weekdays: unique };
+  }
   if (dom !== "*" && dow === "*") { const x = parseInt(dom); if (!isNaN(x)) return { ...d, freq: "monthly" as FreqType, second: s, hour: h, minute: m, monthday: x } }
   if (dom === "*" && dow === "*") return { ...d, freq: "daily" as FreqType, second: s, hour: h, minute: m };
   return { ...d, freq: "custom" as FreqType };
 }
 
-function buildCron(s: { freq: FreqType; second: number; hour: number; minute: number; weekday: number; monthday: number; intervalMin: number; intervalSec: number; custom: string }) {
+function buildCron(s: { freq: FreqType; second: number; hour: number; minute: number; weekdays: number[]; monthday: number; intervalMin: number; intervalSec: number; custom: string }) {
   switch (s.freq) {
     case "daily": return `${s.second} ${s.minute} ${s.hour} * * *`;
-    case "weekly": return `${s.second} ${s.minute} ${s.hour} * * ${s.weekday}`;
+    case "weekly": {
+      const days = (s.weekdays && s.weekdays.length > 0 ? s.weekdays : [1]).slice().sort((a, b) => a - b);
+      return `${s.second} ${s.minute} ${s.hour} * * ${days.join(",")}`;
+    }
     case "monthly": return `${s.second} ${s.minute} ${s.hour} ${s.monthday} * *`;
     case "interval": return `0 */${s.intervalMin} * * * *`;
     case "intervalSec": return `*/${s.intervalSec} * * * * *`;
@@ -168,15 +210,15 @@ function SyncPanel() {
   const [second, setSecond] = useState(0);
   const [hour, setHour] = useState(6);
   const [minute, setMinute] = useState(0);
-  const [weekday, setWeekday] = useState(1);
+  const [weekdays, setWeekdays] = useState<number[]>([1]);
   const [monthday, setMonthday] = useState(1);
   const [intervalMin, setIntervalMin] = useState(30);
   const [intervalSec, setIntervalSec] = useState(30);
   const [custom, setCustom] = useState("");
 
   const cronExpr = useMemo(
-    () => buildCron({ freq, second, hour, minute, weekday, monthday, intervalMin, intervalSec, custom }),
-    [freq, second, hour, minute, weekday, monthday, intervalMin, intervalSec, custom]
+    () => buildCron({ freq, second, hour, minute, weekdays, monthday, intervalMin, intervalSec, custom }),
+    [freq, second, hour, minute, weekdays, monthday, intervalMin, intervalSec, custom]
   );
 
   async function load() {
@@ -188,7 +230,7 @@ function SyncPanel() {
     setEnabled(sch.enabled);
     const p = parseCronToState(sch.cronExpr);
     setFreq(p.freq); setSecond(p.second); setHour(p.hour); setMinute(p.minute);
-    setWeekday(p.weekday); setMonthday(p.monthday); setIntervalMin(p.intervalMin); setIntervalSec(p.intervalSec); setCustom(p.custom);
+    setWeekdays(p.weekdays); setMonthday(p.monthday); setIntervalMin(p.intervalMin); setIntervalSec(p.intervalSec); setCustom(p.custom);
   }
   useEffect(() => { load(); }, []);
 
@@ -280,11 +322,8 @@ function SyncPanel() {
               <div className="grid gap-3 sm:grid-cols-3">
                 {freq === "weekly" && (
                   <div className="space-y-1 sm:col-span-3">
-                    <Label className="text-xs">星期</Label>
-                    <Select value={String(weekday)} onValueChange={(v) => setWeekday(+v)}>
-                      <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                      <SelectContent>{WEEKDAYS.map((d, i) => <SelectItem key={i} value={String(i)}>{d}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <Label className="text-xs">星期(可多选)</Label>
+                    <WeekdayMultiSelect value={weekdays} onChange={setWeekdays} />
                   </div>
                 )}
                 {freq === "monthly" && (
@@ -372,14 +411,14 @@ function CheckPanel() {
   const [second, setSecond] = useState(0);
   const [hour, setHour] = useState(20);
   const [minute, setMinute] = useState(0);
-  const [weekday, setWeekday] = useState(1);
+  const [weekdays, setWeekdays] = useState<number[]>([1]);
   const [monthday, setMonthday] = useState(1);
   const [intervalMin, setIntervalMin] = useState(30);
   const [intervalSec, setIntervalSec] = useState(30);
   const [custom, setCustom] = useState("");
   const cronExpr = useMemo(
-    () => buildCron({ freq, second, hour, minute, weekday, monthday, intervalMin, intervalSec, custom }),
-    [freq, second, hour, minute, weekday, monthday, intervalMin, intervalSec, custom]
+    () => buildCron({ freq, second, hour, minute, weekdays, monthday, intervalMin, intervalSec, custom }),
+    [freq, second, hour, minute, weekdays, monthday, intervalMin, intervalSec, custom]
   );
 
   async function load(d = date) {
@@ -392,7 +431,7 @@ function CheckPanel() {
     setSchedNextRun(sch.nextRun);
     const p = parseCronToState(sch.cronExpr || "0 20 * * *");
     setFreq(p.freq); setSecond(p.second); setHour(p.hour); setMinute(p.minute);
-    setWeekday(p.weekday); setMonthday(p.monthday); setIntervalMin(p.intervalMin); setIntervalSec(p.intervalSec); setCustom(p.custom);
+    setWeekdays(p.weekdays); setMonthday(p.monthday); setIntervalMin(p.intervalMin); setIntervalSec(p.intervalSec); setCustom(p.custom);
   }
   useEffect(() => { load(date); }, [date]);
   useEffect(() => { loadSchedule(); }, []);
@@ -465,11 +504,8 @@ function CheckPanel() {
             <div className="grid gap-3 sm:grid-cols-3">
               {freq === "weekly" && (
                 <div className="space-y-1 sm:col-span-3">
-                  <Label className="text-xs">星期</Label>
-                  <Select value={String(weekday)} onValueChange={(v) => setWeekday(+v)}>
-                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                    <SelectContent>{WEEKDAYS.map((d, i) => <SelectItem key={i} value={String(i)}>{d}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <Label className="text-xs">星期(可多选)</Label>
+                  <WeekdayMultiSelect value={weekdays} onChange={setWeekdays} />
                 </div>
               )}
               {freq === "monthly" && (
