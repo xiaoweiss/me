@@ -187,20 +187,38 @@ function GroupsTab() {
     setDialogOpen(true);
   }
 
+  const [savingGroup, setSavingGroup] = useState(false);
   async function saveGroup() {
-    const body = {
-      name: formName,
-      hotelId: Number(formHotelId),
-      scene: formScene,
-      members: formMembers.map((m) => ({ userId: m.userId, name: m.name, email: m.email })),
-    };
-    if (editGroup) {
-      await request(`/api/email/groups/${editGroup.id}`, { method: "PUT", body: JSON.stringify(body) });
-    } else {
-      await request("/api/email/groups", { method: "POST", body: JSON.stringify(body) });
+    if (!formName.trim()) {
+      toast.error("请先填写邮件组名称");
+      return;
     }
-    setDialogOpen(false);
-    load(page, keyword);
+    if (formMembers.length === 0) {
+      toast.error("至少添加一个成员");
+      return;
+    }
+    setSavingGroup(true);
+    try {
+      const body = {
+        name: formName.trim(),
+        hotelId: Number(formHotelId),
+        scene: formScene,
+        members: formMembers.map((m) => ({ userId: m.userId, name: m.name, email: m.email })),
+      };
+      if (editGroup) {
+        await request(`/api/email/groups/${editGroup.id}`, { method: "PUT", body: JSON.stringify(body) });
+        toast.success("已保存");
+      } else {
+        await request("/api/email/groups", { method: "POST", body: JSON.stringify(body) });
+        toast.success("已新建");
+      }
+      setDialogOpen(false);
+      load(page, keyword);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setSavingGroup(false);
+    }
   }
 
   async function deleteGroup(id: number) {
@@ -421,8 +439,8 @@ function GroupsTab() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>取消</Button>
-            <Button onClick={saveGroup} disabled={!formName}>保存</Button>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={savingGroup}>取消</Button>
+            <Button onClick={saveGroup} disabled={savingGroup}>{savingGroup ? "保存中..." : "保存"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
