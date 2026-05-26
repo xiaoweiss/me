@@ -11,19 +11,38 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, ChevronDown, ChevronUp, RotateCcw, Eye, Save, Send, FileText, Clock, Mails, Paperclip, Upload, Copy } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, RotateCcw, Eye, Save, Send, FileText, Clock, Mails, Paperclip, Upload, Copy, Users as UsersIcon } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
+
+// 维度中文 LABEL_MAP — 铁规 6: 不漏英文枚举给业务用户
+const DIMENSION_LABEL: Record<string, string> = {
+  group: "按集团",
+  type: "按类型",
+};
 
 // ---- Types ----
 
 interface EmailGroup {
   id: number;
   name: string;
-  hotelId: number;
-  hotelName: string;
+  hotelIds: number[];
+  hotelNames: string[];
   scene: string;
   memberCount: number;
+}
+
+interface PreviewMember {
+  id: number;
+  name: string;
+  email: string;
+  hotelId: number;
+  hotelName: string;
+  hotelGroup: string;
+  hotelType: string;
 }
 
 interface EmailGroupMember {
@@ -87,9 +106,17 @@ function GroupsTab() {
   const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
 
   const [formName, setFormName] = useState("");
-  const [formHotelId, setFormHotelId] = useState("0");
+  const [formHotelIds, setFormHotelIds] = useState<number[]>([]);
   const [formScene, setFormScene] = useState("");
   const [formMembers, setFormMembers] = useState<{ userId: number; name: string; email: string }[]>([]);
+
+  // 按维度批量加成员状态
+  const [dimensions, setDimensions] = useState<{ groups: string[]; types: string[] }>({ groups: [], types: [] });
+  const [batchDim, setBatchDim] = useState<"group" | "type">("group");
+  const [batchValue, setBatchValue] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewMembers, setPreviewMembers] = useState<PreviewMember[] | null>(null);
+  const [selectedPreviewIds, setSelectedPreviewIds] = useState<Set<number>>(new Set());
 
   // 群发本组
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
@@ -111,6 +138,19 @@ function GroupsTab() {
   async function confirmSendGroup() {
     if (!sendTargetGroup || sendTemplateId === "0") {
       toast.error("请选择邮件模板");
+      return;
+    }
+    const hotelCount = sendTargetGroup.hotelIds?.length ?? 0;
+    if (hotelCount === 0) {
+      toast.error("该邮件组未关联任何酒店,无法发送");
+      return;
+    }
+    const memberCount = sendTargetGroup.memberCount;
+    if (
+      !confirm(
+        `将向 ${memberCount} 人 × ${hotelCount} 家酒店 = ${memberCount * hotelCount} 封邮件发送,每位收件人会收到 ${hotelCount} 封(每家酒店各一封,渲染各自数据)。\n\n确认发送?`,
+      )
+    ) {
       return;
     }
     setSendingGroup(true);
@@ -162,29 +202,89 @@ function GroupsTab() {
 
   async function openDialog(group?: EmailGroup) {
     if (hotels.length === 0) {
-      const [h, u] = await Promise.all([
+      const [h, u, dim] = await Promise.all([
         request<{ list: Hotel[] }>("/api/admin/hotels"),
         request<{ list: AdminUser[] }>("/api/admin/users"),
+        request<{ groups: string[]; types: string[] }>("/api/email/groups/dimensions"),
       ]);
       setHotels(h.list ?? []);
       setAllUsers((u.list ?? []).filter((u) => u.status === "active"));
+      setDimensions({ groups: dim.groups ?? [], types: dim.types ?? [] });
     }
+
+    // 重置批量加成员状态
+    setPreviewMembers(null);
+    setSelectedPreviewIds(new Set());
+    setBatchValue("");
 
     if (group) {
       setEditGroup(group);
       setFormName(group.name);
-      setFormHotelId(String(group.hotelId));
+      setFormHotelIds(group.hotelIds ?? []);
       setFormScene(group.scene);
       const resp = await request<{ list: EmailGroupMember[] } | null>(`/api/email/groups/${group.id}/members`);
       setFormMembers(resp?.list ?? []);
     } else {
       setEditGroup(null);
       setFormName("");
-      setFormHotelId("0");
+      setFormHotelIds([]);
       setFormScene("");
       setFormMembers([]);
     }
     setDialogOpen(true);
+  }
+
+  function toggleFormHotel(id: number) {
+    setFormHotelIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function loadPreviewMembers() {
+    if (!batchValue) {
+      toast.error("请先选择" + DIMENSION_LABEL[batchDim] + "的值");
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      const resp = await request<{ list: PreviewMember[]; count: number }>("/api/email/groups/preview-members", {
+        method: "POST",
+        body: JSON.stringify({ dimension: batchDim, value: batchValue }),
+      });
+      setPreviewMembers(resp.list ?? []);
+      setSelectedPreviewIds(new Set((resp.list ?? []).map((u) => u.id))); // 默认全选
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "预览失败");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function togglePreviewSelect(uid: number) {
+    setSelectedPreviewIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid); else next.add(uid);
+      return next;
+    });
+  }
+
+  function selectAllPreview() {
+    setSelectedPreviewIds(new Set((previewMembers ?? []).map((u) => u.id)));
+  }
+  function clearAllPreview() {
+    setSelectedPreviewIds(new Set());
+  }
+
+  function addSelectedToMembers() {
+    if (!previewMembers || selectedPreviewIds.size === 0) return;
+    const existingIds = new Set(formMembers.map((m) => m.userId));
+    const toAdd = previewMembers
+      .filter((u) => selectedPreviewIds.has(u.id) && !existingIds.has(u.id))
+      .map((u) => ({ userId: u.id, name: u.name, email: u.email }));
+    if (toAdd.length === 0) {
+      toast.info("选中的成员都已在列表中");
+      return;
+    }
+    setFormMembers((prev) => [...prev, ...toAdd]);
+    toast.success(`已加入 ${toAdd.length} 人`);
   }
 
   const [savingGroup, setSavingGroup] = useState(false);
@@ -201,7 +301,7 @@ function GroupsTab() {
     try {
       const body = {
         name: formName.trim(),
-        hotelId: Number(formHotelId),
+        hotelIds: formHotelIds,
         scene: formScene,
         members: formMembers.map((m) => ({ userId: m.userId, name: m.name, email: m.email })),
       };
@@ -312,7 +412,29 @@ function GroupsTab() {
                 <>
                   <TableRow key={g.id}>
                     <TableCell className="font-medium">{g.name}</TableCell>
-                    <TableCell>{g.hotelName || "-"}</TableCell>
+                    <TableCell>
+                      {(g.hotelNames?.length ?? 0) === 0 ? (
+                        <span className="text-muted-foreground text-xs">未关联</span>
+                      ) : g.hotelNames.length === 1 ? (
+                        <span className="text-xs">{g.hotelNames[0]}</span>
+                      ) : (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2">
+                              {g.hotelNames.length} 家酒店
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-72 p-2">
+                            <div className="flex flex-wrap gap-1">
+                              {g.hotelNames.map((n, i) => (
+                                <Badge key={i} variant="secondary" className="text-xs">{n}</Badge>
+                              ))}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                    </TableCell>
                     <TableCell><Badge variant="outline">{g.scene || "-"}</Badge></TableCell>
                     <TableCell>
                       <Button variant="ghost" size="sm" className="gap-1 h-7 text-xs" onClick={() => toggleExpand(g.id)}>
@@ -322,7 +444,14 @@ function GroupsTab() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="default" size="sm" className="h-7 text-xs gap-1" onClick={() => openSendDialog(g)} disabled={g.memberCount === 0}>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => openSendDialog(g)}
+                          disabled={g.memberCount === 0 || (g.hotelIds?.length ?? 0) === 0}
+                          title={(g.hotelIds?.length ?? 0) === 0 ? "请先在「编辑」中选择至少一家酒店" : undefined}
+                        >
                           <Send className="h-3 w-3" /> 发送
                         </Button>
                         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => openDialog(g)}>编辑</Button>
@@ -395,33 +524,141 @@ function GroupsTab() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editGroup ? "编辑邮件组" : "新建邮件组"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
             <div className="space-y-1">
               <Label>名称</Label>
               <Input value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="如：日报收件人" />
             </div>
             <div className="space-y-1">
-              <Label>酒店</Label>
-              <Select value={formHotelId} onValueChange={setFormHotelId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">不限</SelectItem>
-                  {hotels.map((h) => <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>关联酒店 (可多选,发送时每家各发一封,渲染各自数据)</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between h-9 text-xs font-normal">
+                    {formHotelIds.length === 0 ? (
+                      <span className="text-muted-foreground">请选择...</span>
+                    ) : (
+                      <span>已选 {formHotelIds.length} 家</span>
+                    )}
+                    <ChevronDown className="h-3 w-3 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <div className="max-h-72 overflow-y-auto p-2 space-y-1">
+                    {hotels.map((h) => {
+                      const checked = formHotelIds.includes(h.id);
+                      return (
+                        <label key={h.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted cursor-pointer text-xs">
+                          <Checkbox checked={checked} onCheckedChange={() => toggleFormHotel(h.id)} />
+                          <span>{h.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {formHotelIds.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {formHotelIds.map((id) => {
+                    const h = hotels.find((x) => x.id === id);
+                    return (
+                      <Badge key={id} variant="secondary" className="gap-1 text-xs">
+                        {h?.name ?? `酒店 #${id}`}
+                        <button type="button" className="ml-0.5 hover:text-destructive" onClick={() => toggleFormHotel(id)}>&times;</button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
             </div>
             <div className="space-y-1">
               <Label>场景</Label>
               <Input value={formScene} onChange={(e) => setFormScene(e.target.value)} placeholder="如：daily_report" />
             </div>
+
+            {/* 批量按维度加成员 */}
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs h-8 w-full justify-start">
+                  <UsersIcon className="h-3.5 w-3.5" />
+                  批量按维度加入成员
+                  <ChevronDown className="h-3 w-3 ml-auto" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-2 pt-2 px-2 pb-2 border rounded-md mt-1 bg-muted/30">
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs text-muted-foreground">维度</Label>
+                    <Select value={batchDim} onValueChange={(v) => { setBatchDim(v as "group" | "type"); setBatchValue(""); setPreviewMembers(null); }}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="group">{DIMENSION_LABEL.group}</SelectItem>
+                        <SelectItem value="type">{DIMENSION_LABEL.type}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-xs text-muted-foreground">值</Label>
+                    <Select value={batchValue} onValueChange={setBatchValue}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="请选择..." /></SelectTrigger>
+                      <SelectContent>
+                        {(batchDim === "group" ? dimensions.groups : dimensions.types).map((v) => (
+                          <SelectItem key={v} value={v}>{v}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button size="sm" className="h-8 text-xs" onClick={loadPreviewMembers} disabled={previewLoading || !batchValue}>
+                    {previewLoading ? "加载中..." : "预览"}
+                  </Button>
+                </div>
+
+                {previewMembers && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">匹配 {previewMembers.length} 人</span>
+                      <div className="flex gap-1">
+                        <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={selectAllPreview}>全选</Button>
+                        <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={clearAllPreview}>全清</Button>
+                      </div>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto border rounded bg-background">
+                      {previewMembers.length === 0 ? (
+                        <div className="text-center text-xs text-muted-foreground py-4">无匹配成员</div>
+                      ) : (
+                        previewMembers.map((u) => (
+                          <label key={u.id} className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-muted cursor-pointer">
+                            <Checkbox checked={selectedPreviewIds.has(u.id)} onCheckedChange={() => togglePreviewSelect(u.id)} />
+                            <span className="font-medium">{u.name}</span>
+                            <span className="text-muted-foreground">{u.email}</span>
+                            <Badge variant="outline" className="ml-auto text-[10px]">{u.hotelName}</Badge>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full h-8 text-xs gap-1"
+                      onClick={addSelectedToMembers}
+                      disabled={selectedPreviewIds.size === 0}
+                    >
+                      <Plus className="h-3 w-3" />
+                      加入选中 ({selectedPreviewIds.size} 人)
+                    </Button>
+                  </div>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+
             <div className="space-y-2">
-              <Label>成员</Label>
+              <Label>成员 ({formMembers.length})</Label>
               <div className="flex flex-wrap gap-1 min-h-[32px] rounded-md border p-2">
-                {formMembers.map((m) => (
+                {formMembers.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">暂无</span>
+                ) : formMembers.map((m) => (
                   <Badge key={m.userId} variant="secondary" className="gap-1 text-xs">
                     {m.name}
                     <button type="button" className="ml-0.5 hover:text-destructive" onClick={() => removeMember(m.userId)}>&times;</button>
@@ -429,7 +666,7 @@ function GroupsTab() {
                 ))}
               </div>
               <Select onValueChange={(v) => { const u = allUsers.find((u) => u.id === +v); if (u) addMember(u); }}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="添加成员..." /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="单独添加成员..." /></SelectTrigger>
                 <SelectContent>
                   {allUsers.filter((u) => !formMembers.some((m) => m.userId === u.id)).map((u) => (
                     <SelectItem key={u.id} value={String(u.id)}>{u.name} ({u.email || "无邮箱"})</SelectItem>
