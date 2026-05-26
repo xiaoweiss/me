@@ -335,7 +335,7 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
                   >
                     <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-chart-comp/20 text-chart-comp text-[8px] font-bold leading-none">C</span>
                     {noHotel ? (
-                      <span className="text-[8px] font-medium" style={{ color: `hsl(${MUTED_HSL})` }}>{DASH}</span>
+                      <span className="text-[8px] font-medium" style={{ color: `hsl(${MUTED_HSL})` }}>{compVal}%</span>
                     ) : (
                       <CompareValue myVal={myVal} otherVal={compVal} label={`${compVal}%`} prefix="" />
                     )}
@@ -343,7 +343,7 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
                   <div className="w-full flex items-center justify-center gap-0.5 rounded px-0.5 py-1">
                     <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-chart-market/20 text-chart-market text-[8px] font-bold leading-none">M</span>
                     {noHotel ? (
-                      <span className="text-[8px] font-medium" style={{ color: `hsl(${MUTED_HSL})` }}>{DASH}</span>
+                      <span className="text-[8px] font-medium" style={{ color: `hsl(${MUTED_HSL})` }}>{mktVal}%</span>
                     ) : (
                       <CompareValue myVal={myVal} otherVal={mktVal} label={`${mktVal}%`} prefix="" />
                     )}
@@ -368,7 +368,7 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
                   >
                     <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-chart-comp/20 text-chart-comp text-[8px] font-bold leading-none">C</span>
                     {noHotel ? (
-                      <span className="text-[8px] font-medium" style={{ color: `hsl(${MUTED_HSL})` }}>{DASH}</span>
+                      <span className="text-[8px] font-medium" style={{ color: `hsl(${MUTED_HSL})` }}>{compVal}</span>
                     ) : (
                       <CompareValue myVal={myVal} otherVal={compVal} label={`${compVal}`} prefix="" />
                     )}
@@ -376,7 +376,7 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
                   <div className="w-full flex items-center justify-center gap-0.5 rounded px-0.5 py-1">
                     <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded-full bg-chart-market/20 text-chart-market text-[8px] font-bold leading-none">M</span>
                     {noHotel ? (
-                      <span className="text-[8px] font-medium" style={{ color: `hsl(${MUTED_HSL})` }}>{DASH}</span>
+                      <span className="text-[8px] font-medium" style={{ color: `hsl(${MUTED_HSL})` }}>{mktVal}</span>
                     ) : (
                       <CompareValue myVal={myVal} otherVal={mktVal} label={`${mktVal}`} prefix="" />
                     )}
