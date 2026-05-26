@@ -79,6 +79,7 @@ export function generateMonthData(year: number, month: number): DayData[] {
       },
       competitorSumBookings: compSumBookings,
       marketSumBookings: marketSumBookings,
+      hasHotelRecord: true,
     });
   }
   return days;

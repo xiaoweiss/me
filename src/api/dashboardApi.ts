@@ -59,6 +59,8 @@ export async function fetchMonthData(
   const compActMap = new Map<string, ApiPeriodData[]>();
   const mktActMap = new Map<string, ApiPeriodData[]>();
   const eventMap = new Map<string, number>();
+  // 多酒店时只要任一酒店该天有 record 就算「有」(否则才显示灰色「该补录入」)
+  const hasHotelRecordMap = new Map<string, boolean>();
 
   for (const { occ, act } of results) {
     for (const d of occ) {
@@ -69,6 +71,7 @@ export async function fetchMonthData(
       if (!mktOccMap.has(d.date)) mktOccMap.set(d.date, []);
       mktOccMap.get(d.date)!.push(d.marketAvg);
       eventMap.set(d.date, Math.max(eventMap.get(d.date) ?? 0, d.cityEventCount));
+      if (d.hasHotelRecord) hasHotelRecordMap.set(d.date, true);
     }
     for (const d of act) {
       if (!actMap.has(d.date)) actMap.set(d.date, []);
@@ -126,6 +129,7 @@ export async function fetchMonthData(
       marketSumBookings: sum(mktAct),
       competitorPeriodBookings: toPeriodValues(compAct),
       marketPeriodBookings: toPeriodValues(mktAct),
+      hasHotelRecord: hasHotelRecordMap.get(date) ?? false,
     });
   }
 

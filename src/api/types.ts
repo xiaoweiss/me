@@ -37,6 +37,7 @@ export interface DayData {
   marketSumBookings: number;
   competitorPeriodBookings: PeriodValues;
   marketPeriodBookings: PeriodValues;
+  hasHotelRecord: boolean; // 本酒店当天是否有 meeting_records；false 时格子显示「—」+ 灰色虚线
 }
 
 export interface CityEvent {
@@ -89,6 +90,7 @@ export interface ApiDailyOccupancy {
   competitorAvg: ApiPeriodData;
   marketAvg: ApiPeriodData;
   cityEventCount: number;
+  hasHotelRecord: boolean;
 }
 
 export interface ApiDailyActivity {

@@ -240,6 +240,7 @@ export function Dashboard() {
         marketSumBookings: 0,
         competitorPeriodBookings: zeroPeriod,
         marketPeriodBookings: zeroPeriod,
+        hasHotelRecord: false,
       }
     );
   });
