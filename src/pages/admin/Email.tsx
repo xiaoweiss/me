@@ -201,16 +201,15 @@ function GroupsTab() {
   }
 
   async function openDialog(group?: EmailGroup) {
-    if (hotels.length === 0) {
-      const [h, u, dim] = await Promise.all([
-        request<{ list: Hotel[] }>("/api/admin/hotels"),
-        request<{ list: AdminUser[] }>("/api/admin/users"),
-        request<{ groups: string[]; types: string[] }>("/api/email/groups/dimensions"),
-      ]);
-      setHotels(h.list ?? []);
-      setAllUsers((u.list ?? []).filter((u) => u.status === "active"));
-      setDimensions({ groups: dim.groups ?? [], types: dim.types ?? [] });
-    }
+    // 每次都 re-fetch:业务方在钉钉新增酒店/用户/改类型后,不用刷浏览器就能立刻看到
+    const [h, u, dim] = await Promise.all([
+      request<{ list: Hotel[] }>("/api/admin/hotels"),
+      request<{ list: AdminUser[] }>("/api/admin/users"),
+      request<{ groups: string[]; types: string[] }>("/api/email/groups/dimensions"),
+    ]);
+    setHotels(h.list ?? []);
+    setAllUsers((u.list ?? []).filter((u) => u.status === "active"));
+    setDimensions({ groups: dim.groups ?? [], types: dim.types ?? [] });
 
     // 重置批量加成员状态
     setPreviewMembers(null);
