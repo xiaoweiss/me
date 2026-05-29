@@ -534,7 +534,7 @@ function GroupsTab() {
             </div>
             <div className="space-y-1">
               <Label>关联酒店 (可多选,发送时每家各发一封,渲染各自数据)</Label>
-              <Popover>
+              <Popover modal>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-between h-9 text-xs font-normal">
                     {formHotelIds.length === 0 ? (
