@@ -12,6 +12,10 @@ const MONTHS = [
   "七月", "八月", "九月", "十月", "十一月", "十二月",
 ];
 
+// 过去 2 年 + 当前 + 未来 5 年(共 8 年),业务可查历史也能预订未来
+const NOW_YEAR = new Date().getFullYear();
+const YEARS = Array.from({ length: 8 }, (_, i) => NOW_YEAR - 2 + i);
+
 export function MonthYearSelector({ month, year, onMonthChange, onYearChange }: MonthYearSelectorProps) {
   return (
     <div className="flex items-center gap-3">
@@ -30,7 +34,7 @@ export function MonthYearSelector({ month, year, onMonthChange, onYearChange }: 
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {[2024, 2025, 2026].map((y) => (
+          {YEARS.map((y) => (
             <SelectItem key={y} value={String(y)}>{y}</SelectItem>
           ))}
         </SelectContent>
