@@ -14,7 +14,7 @@ interface DayCellProps {
 }
 
 const PERIODS: ("AM" | "PM")[] = ["AM", "PM"];
-const PERIOD_LABELS = { AM: "M", PM: "A" };
+const PERIOD_LABELS = { AM: "AM", PM: "PM" };
 
 // 「本酒店该天漏录」灰色 token (hsl, html-to-image 兼容; 不用 OKLCH)
 const MUTED_HSL = "0 0% 60%";
@@ -80,7 +80,7 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
     );
 
     if (mode === "occupancy") {
-      // === v6 双柱布局: M/A 双柱 + 柱顶本店 % + 2x2 vs C / vs M 方向矩阵 ===
+      // === v6 双柱布局: AM/PM 双柱 + 柱顶本店 % + 2x2 vs C / vs M 方向矩阵 ===
       const amVal = day.periodOccupancy.AM;
       const pmVal = day.periodOccupancy.PM;
       const amColor = getThresholdColor(amVal, thresholds);
@@ -152,10 +152,10 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
         >
           {topRow}
 
-          {/* 中部: M / A 双柱(数字 + 柱身 + 标签) */}
+          {/* 中部: AM / PM 双柱(数字 + 柱身 + 标签) */}
           <div className="flex-1 flex px-1.5 pb-0.5 gap-1 min-h-0">
-            {renderColumn(amVal, amColor, "M", amDim)}
-            {renderColumn(pmVal, pmColor, "A", pmDim)}
+            {renderColumn(amVal, amColor, "AM", amDim)}
+            {renderColumn(pmVal, pmColor, "PM", pmDim)}
           </div>
 
           {/* 底部: 行标 C/M + 上午区/下午区 两个按钮 */}
@@ -280,7 +280,7 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
         )}
       </div>
 
-      {/* M/A grid - hotel */}
+      {/* AM/PM grid - hotel */}
       <div className="flex-1 grid grid-cols-2 gap-px px-0.5 pb-0.5">
         {PERIODS.map((p) => {
           const val = periodValues[p];
@@ -317,7 +317,7 @@ export function DayCell({ day, mode, onClick, onCityEventClick, onCompetitorClic
         })}
       </div>
 
-      {/* Bottom: C/M 对齐到上方 M/A 两列 —— 整行可点击，不止是徽标 */}
+      {/* Bottom: C/M 对齐到上方 AM/PM 两列 —— 整行可点击，不止是徽标 */}
       <div className="border-t px-0.5 py-0.5">
         {mode === "occupancy" ? (
           <div className="grid grid-cols-2 gap-px">
